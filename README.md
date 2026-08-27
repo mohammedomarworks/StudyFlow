@@ -1,81 +1,111 @@
-# StudyFlow — Study Planner
+# 📚 StudyFlow
 
-A complete, responsive study planner built with **HTML5, CSS3, and Vanilla JavaScript** —
-no frameworks, no build step. All data is stored locally in the browser via **Local Storage**,
-so it works fully offline and keeps your data private.
+> **A modern productivity dashboard for students built with HTML, CSS, and JavaScript.**
 
-![Made with HTML5 · CSS3 · Vanilla JS](https://img.shields.io/badge/stack-HTML5%20·%20CSS3%20·%20Vanilla%20JS-7c3aed)
+StudyFlow is a responsive web application that helps students organize their academic life in one place. It allows users to manage study tasks, organize subjects, take notes, track progress, and stay productive through a clean and intuitive interface.
+
+---
 
 ## ✨ Features
 
-- **Dashboard** — time-based greeting, study statistics, an animated completion ring,
-  today's tasks (with inline complete), upcoming exams with countdowns, and a daily quote.
-- **Tasks** — full CRUD: Add, Edit, Delete, Complete, plus **Search**, **Filter by subject**,
-  **Filter by status**, **Sort by due date / priority**, and **form validation**.
-- **Subjects** — organize courses with a color, teacher and exam date; live task counts and progress.
-- **Calendar** — monthly grid plotting tasks (in the subject's color) and exams (red), with
-  month navigation and a per-day detail view.
-- **Progress** — overall ring, summary tiles, per-subject progress bars, and priority breakdown.
-- **Notes** — searchable study notes linked to subjects.
-- **About** — a live data snapshot, feature overview, and a "reset all data" utility.
-- **Dark / Light mode** — persisted to Local Storage, respects your OS preference, no flash on load.
-- **Responsive** — Flexbox + CSS Grid layouts with a mobile hamburger navbar.
-- Smooth animations, hover effects, toasts, and reusable modal/confirm dialogs.
+- 📋 Task Management (Add, Edit, Delete)
+- 📚 Subject Management
+- 📅 Study Calendar
+- 📝 Notes Section
+- 📈 Progress Dashboard
+- 🌙 Dark / Light Mode
+- 💾 Local Storage Support
+- 📱 Fully Responsive Design
+- 🔍 Search & Filter
+- ⚡ Smooth User Experience
 
-## 📁 Project structure
+---
 
-```
-Study Planner/
-├── index.html              # Dashboard (entry point)
-├── pages/                  # The other six pages
-│   ├── subjects.html
-│   ├── tasks.html
-│   ├── calendar.html
-│   ├── progress.html
-│   ├── notes.html
-│   └── about.html
+## 🛠️ Tech Stack
+
+- HTML5
+- CSS3
+- JavaScript (Vanilla)
+- CSS Grid
+- Flexbox
+- Local Storage
+- Public API
+
+---
+
+## 📂 Project Structure
+
+```text
+StudyFlow/
+│
+├── index.html
+├── pages/
 ├── css/
-│   ├── variables.css       # Design tokens + light/dark themes
-│   ├── base.css            # Reset, typography, animations, utilities
-│   ├── components.css      # Navbar, buttons, cards, forms, modals, toasts
-│   ├── pages.css           # Per-page layouts (dashboard, calendar, rings…)
-│   └── responsive.css      # Breakpoints (Flexbox/Grid)
-└── js/
-    ├── storage.js          # Local Storage data layer + date utils + seed data
-    ├── app.js              # Shared shell: theme, navbar, toast, modal, quotes
-    ├── dashboard.js
-    ├── tasks.js
-    ├── subjects.js
-    ├── calendar.js
-    ├── progress.js
-    ├── notes.js
-    └── about.js
+├── js/
+├── assets/
+└── README.md
 ```
 
-## 🚀 Running it
+---
 
-It's a static site — no dependencies. Either:
+## 🚀 Getting Started
 
-- **Double-click `index.html`** to open it directly in your browser, or
-- Serve the folder for a proper `http://` origin:
+Clone the repository:
 
 ```bash
-python3 -m http.server 8000
+git clone https://github.com/mohammedomarworks/StudyFlow.git
 ```
 
-Then visit <http://localhost:8000>.
+Open the project folder and launch `index.html` with Live Server or any modern browser.
 
-On first launch the app seeds a few example subjects, tasks and notes so you can see it in
-action. Use **About → Reset all data** to clear everything and start fresh.
+---
 
-## 🗃️ Data model (Local Storage keys)
+## 📸 Screenshots
 
-| Key            | Contents                                                        |
-| -------------- | --------------------------------------------------------------- |
-| `sp_subjects`  | `{ id, name, color, teacher, examDate }`                        |
-| `sp_tasks`     | `{ id, title, subjectId, dueDate, priority, notes, completed }` |
-| `sp_notes`     | `{ id, title, subjectId, content, createdAt, updatedAt }`       |
-| `sp_settings`  | `{ theme }`                                                     |
+> Screenshots will be added soon.
 
-All statistics (progress, countdowns, overdue detection) are **derived** from this data, so
-every page stays consistent automatically.
+---
+
+## 🌐 Live Demo
+
+Coming soon.
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Responsive dashboard
+- [x] Task management
+- [x] Subject management
+- [x] Notes
+- [x] Progress tracking
+- [x] Local Storage
+- [ ] Drag & Drop Tasks
+- [ ] Pomodoro Timer
+- [ ] Habit Tracker
+- [ ] Authentication
+- [ ] Cloud Sync
+
+---
+
+## 🤝 Contributing
+
+Contributions, suggestions, and feedback are welcome. Feel free to fork the repository and submit a pull request.
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License.
+
+---
+
+## 👨‍💻 Author
+
+**Mohammed Omar**
+
+GitHub: https://github.com/mohammedomarworks
+
+---
+
+⭐ If you like this project, consider giving it a star!
