@@ -62,15 +62,77 @@ Open the project folder and launch `index.html` with Live Server or any modern b
 
 ## 📸 Screenshots
 
-> Screenshots will be added soon.
+### 🏠 Dashboard
+
+The StudyFlow dashboard provides an overview of tasks, completed work, upcoming exams, and overall study progress.
+
+<p align="center">
+  <img src="assets/Screenshots/dashboard.png" alt="StudyFlow Dashboard" width="900">
+</p>
 
 ---
+
+### 📋 Tasks
+
+Manage academic tasks by adding, editing, completing, and deleting tasks.
+
+<p align="center">
+  <img src="assets/Screenshots/tasks.png" alt="StudyFlow Tasks" width="900">
+</p>
+
+---
+
+### 📚 Subjects
+
+Organize different academic subjects and keep track of subject-related information.
+
+<p align="center">
+  <img src="assets/Screenshots/subjects.png" alt="StudyFlow Subjects" width="900">
+</p>
+
+---
+
+### 📅 Calendar
+
+View important academic dates, tasks, and upcoming examinations through the study calendar.
+
+<p align="center">
+  <img src="assets/Screenshots/calendar.png" alt="StudyFlow Calendar" width="900">
+</p>
+
+---
+
+### 📝 Notes
+
+Create and manage study notes in one centralized place.
+
+<p align="center">
+  <img src="assets/Screenshots/notes.png" alt="StudyFlow Notes" width="900">
+</p>
+
+---
+
+### 📊 Progress
+
+Monitor academic progress and task completion through visual statistics.
+
+<p align="center">
+  <img src="assets/Screenshots/progress.png" alt="StudyFlow Progress" width="900">
+</p>
+
+---
+
+### ℹ️ About
+
+Learn more about StudyFlow and its purpose as a student productivity application.
+
+<p align="center">
+  <img src="assets/Screenshots/about.png" alt="StudyFlow About" width="900">
+</p>
 
 ## 🌐 Live Demo
 
-Coming soon.
-
----
+🚀 **[Visit StudyFlow](https://mohammedomarworks.github.io/StudyFlow/)**
 
 ## 🗺️ Roadmap
 
