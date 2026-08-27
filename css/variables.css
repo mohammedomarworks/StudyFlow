@@ -1,0 +1,131 @@
+/* ==========================================================================
+   variables.css — Design tokens & theming
+   --------------------------------------------------------------------------
+   Every color, spacing value, shadow and radius the app uses is declared here
+   as a CSS custom property. The light theme lives on :root; the dark theme
+   overrides a handful of tokens on [data-theme="dark"]. Because components
+   only ever reference the token (never a raw hex value), flipping the theme
+   is a single attribute change on the <html> element.
+   ========================================================================== */
+
+:root {
+  /* ---- Brand palette (purple) ---------------------------------------- */
+  --purple-50:  #f5f3ff;
+  --purple-100: #ede9fe;
+  --purple-200: #ddd6fe;
+  --purple-300: #c4b5fd;
+  --purple-400: #a78bfa;
+  --purple-500: #8b5cf6;
+  --purple-600: #7c3aed;   /* primary */
+  --purple-700: #6d28d9;
+  --purple-800: #5b21b6;
+  --purple-900: #4c1d95;
+
+  /* ---- Semantic colors ----------------------------------------------- */
+  --primary:          var(--purple-600);
+  --primary-hover:    var(--purple-700);
+  --primary-soft:     var(--purple-100);   /* tinted backgrounds */
+  --primary-contrast: #ffffff;             /* text on primary */
+
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger:  #ef4444;
+  --info:    #3b82f6;
+
+  /* Signature gradient used on hero elements, brand mark, progress rings */
+  --gradient: linear-gradient(135deg, #7c3aed 0%, #a855f7 55%, #c084fc 100%);
+  --gradient-soft: linear-gradient(135deg, #ede9fe 0%, #faf5ff 100%);
+
+  /* ---- Surfaces & text (LIGHT theme) --------------------------------- */
+  --bg:            #f6f5fb;   /* page background */
+  --surface:       #ffffff;   /* cards, navbar, modals */
+  --surface-2:     #f3f1fa;   /* subtle inset areas, inputs */
+  --surface-3:     #ece9f6;   /* hover states on subtle areas */
+  --border:        #e8e5f2;
+  --border-strong: #d9d4ec;
+
+  --text:       #1e1b2e;   /* headings / primary text */
+  --text-body:  #3a3550;   /* body copy */
+  --text-muted: #6f6a86;   /* secondary text */
+  --text-faint: #9c98ad;   /* placeholders, captions */
+
+  /* ---- Elevation ----------------------------------------------------- */
+  --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
+  --shadow-md: 0 4px 16px rgba(76, 29, 149, 0.08);
+  --shadow-lg: 0 12px 32px rgba(76, 29, 149, 0.12);
+  --shadow-primary: 0 8px 20px rgba(124, 58, 237, 0.28);
+
+  /* ---- Radii --------------------------------------------------------- */
+  --radius-sm: 10px;
+  --radius:    16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --radius-pill: 999px;
+
+  /* ---- Spacing scale ------------------------------------------------- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+
+  /* ---- Typography ---------------------------------------------------- */
+  --font-sans: 'Plus Jakarta Sans', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --fs-xs:   0.75rem;
+  --fs-sm:   0.875rem;
+  --fs-base: 1rem;
+  --fs-lg:   1.125rem;
+  --fs-xl:   1.375rem;
+  --fs-2xl:  1.75rem;
+  --fs-3xl:  2.25rem;
+
+  /* ---- Motion -------------------------------------------------------- */
+  --transition-fast: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition:      240ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ---- Layout -------------------------------------------------------- */
+  --navbar-h: 68px;
+  --container: 1200px;
+}
+
+/* ==========================================================================
+   DARK THEME — overrides only the tokens that must change.
+   Applied via <html data-theme="dark"> (set by js/app.js before paint).
+   ========================================================================== */
+[data-theme="dark"] {
+  --primary:          var(--purple-400);
+  --primary-hover:    var(--purple-300);
+  --primary-soft:     rgba(139, 92, 246, 0.16);
+  --primary-contrast: #17132a;
+
+  --gradient: linear-gradient(135deg, #7c3aed 0%, #9333ea 55%, #a855f7 100%);
+  --gradient-soft: linear-gradient(135deg, #241d3d 0%, #1b1730 100%);
+
+  --bg:            #120f22;
+  --surface:       #1b1730;
+  --surface-2:     #241f3a;
+  --surface-3:     #2d2747;
+  --border:        #2c2745;
+  --border-strong: #3a3357;
+
+  --text:       #f1eefb;
+  --text-body:  #d6d1e8;
+  --text-muted: #a49fbd;
+  --text-faint: #7d7897;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 14px 34px rgba(0, 0, 0, 0.55);
+  --shadow-primary: 0 8px 22px rgba(124, 58, 237, 0.45);
+}
+
+/* Smooth the transition when the user flips the theme */
+html.theme-transition,
+html.theme-transition * {
+  transition: background-color var(--transition),
+              border-color var(--transition),
+              color var(--transition) !important;
+}

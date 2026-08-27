@@ -1,0 +1,163 @@
+/* ==========================================================================
+   base.css — Reset, typography, global elements, animations, utilities
+   ========================================================================== */
+
+/* ---- Modern reset -------------------------------------------------------- */
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+* { margin: 0; padding: 0; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.6;
+  color: var(--text-body);
+  background: var(--bg);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* subtle radial glow behind the page for depth */
+  background-image:
+    radial-gradient(1200px 500px at 100% -10%, rgba(124, 58, 237, 0.07), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(168, 85, 247, 0.06), transparent 55%);
+  background-attachment: fixed;
+}
+
+img, svg { display: block; max-width: 100%; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; }
+a { color: inherit; text-decoration: none; }
+ul, ol { list-style: none; }
+
+/* ---- Headings ------------------------------------------------------------ */
+h1, h2, h3, h4 {
+  color: var(--text);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+h1 { font-size: var(--fs-3xl); }
+h2 { font-size: var(--fs-2xl); }
+h3 { font-size: var(--fs-xl); }
+
+/* ---- Selection & focus --------------------------------------------------- */
+::selection { background: var(--purple-300); color: var(--text); }
+
+:focus-visible {
+  outline: 3px solid var(--purple-400);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---- Custom scrollbar ---------------------------------------------------- */
+::-webkit-scrollbar { width: 12px; height: 12px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--radius-pill);
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--purple-400); }
+
+/* ==========================================================================
+   Layout helpers
+   ========================================================================== */
+.container {
+  width: 100%;
+  max-width: var(--container);
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+}
+
+/* Main page wrapper: pushes content below the fixed navbar */
+.page {
+  padding-top: calc(var(--navbar-h) + var(--space-6));
+  padding-bottom: var(--space-7);
+  min-height: 100vh;
+}
+
+.page-header { margin-bottom: var(--space-6); }
+.page-header h1 { margin-bottom: var(--space-2); }
+.page-header p { color: var(--text-muted); max-width: 60ch; }
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-lg);
+  margin-bottom: var(--space-4);
+}
+
+/* Reusable grids (Flexbox + CSS Grid as required) */
+.grid { display: grid; gap: var(--space-5); }
+.flex { display: flex; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.gap-2 { gap: var(--space-2); }
+.gap-3 { gap: var(--space-3); }
+.gap-4 { gap: var(--space-4); }
+.wrap { flex-wrap: wrap; }
+
+/* ---- Text utilities ------------------------------------------------------ */
+.text-muted  { color: var(--text-muted); }
+.text-faint  { color: var(--text-faint); }
+.text-center { text-align: center; }
+.text-gradient {
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.mt-2 { margin-top: var(--space-2); }
+.mt-4 { margin-top: var(--space-4); }
+.mt-6 { margin-top: var(--space-6); }
+.hidden { display: none !important; }
+
+/* ==========================================================================
+   Keyframe animations
+   ========================================================================== */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(40px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Entrance animation applied to cards/sections. The --delay custom property
+   lets us stagger multiple elements from the markup. */
+.animate-in {
+  animation: fadeInUp var(--transition-slow) both;
+  animation-delay: var(--delay, 0ms);
+}
+
+/* Respect users who prefer reduced motion — disable non-essential animation */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

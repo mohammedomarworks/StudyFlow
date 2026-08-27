@@ -1,0 +1,72 @@
+/* ==========================================================================
+   responsive.css — Breakpoints
+   The layouts above are built mobile-friendly with auto-fit grids; this file
+   handles the deliberate breakpoints: navbar → hamburger, multi-column grids
+   collapsing, and spacing tweaks for small screens.
+   Breakpoints: 1024px (tablet-landscape) · 768px (tablet) · 560px (phone)
+   ========================================================================== */
+
+/* ---- <= 1024px : tighten dashboard + stats ------------------------------- */
+@media (max-width: 1024px) {
+  .dash-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ---- <= 768px : mobile navbar (hamburger) + single-column layouts -------- */
+@media (max-width: 768px) {
+  :root { --navbar-h: 62px; }
+
+  /* Collapse the nav links into a slide-down panel */
+  .nav-toggle { display: grid; }
+  .nav-links {
+    position: fixed;
+    top: var(--navbar-h);
+    left: 0;
+    right: 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    padding: var(--space-4);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    /* hidden by default, revealed by .open (toggled in app.js) */
+    transform: translateY(-12px);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform var(--transition), opacity var(--transition);
+  }
+  .nav-links.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .nav-links a { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); }
+
+  .form-row { grid-template-columns: 1fr; }
+
+  .hero h1 { font-size: var(--fs-2xl); }
+  h1 { font-size: var(--fs-2xl); }
+
+  .toolbar .search { min-width: 100%; order: -1; }
+  .toolbar .select { flex: 1; }
+}
+
+/* ---- <= 560px : phones --------------------------------------------------- */
+@media (max-width: 560px) {
+  .container { padding-inline: var(--space-4); }
+  .stats-grid { grid-template-columns: 1fr; }
+
+  .cal-cell { min-height: 72px; padding: 4px; }
+  .cal-cell__num { font-size: var(--fs-xs); }
+  .cal-event { font-size: 0.6rem; padding: 1px 4px; }
+
+  .task-item { flex-wrap: wrap; }
+  .task-item__actions { width: 100%; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: var(--space-2); margin-top: var(--space-2); }
+
+  .modal__foot { flex-direction: column-reverse; }
+  .modal__foot .btn { width: 100%; }
+
+  .toast-wrap { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }
+  .toast { min-width: 0; width: 100%; }
+}

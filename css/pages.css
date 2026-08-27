@@ -1,0 +1,342 @@
+/* ==========================================================================
+   pages.css — Layouts specific to individual pages
+   Dashboard · Tasks · Subjects · Calendar · Progress · Notes · About
+   ========================================================================== */
+
+/* ==========================================================================
+   Shared: stat cards & toolbars
+   ========================================================================== */
+/* Two-column layout that collapses to one column on narrow screens. */
+.two-col { grid-template-columns: 1.3fr 1fr; align-items: start; }
+@media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+}
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+.stat-card__icon {
+  width: 52px; height: 52px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.stat-card__icon svg { width: 26px; height: 26px; }
+.stat-card__icon.green  { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
+.stat-card__icon.orange { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
+.stat-card__icon.blue   { background: color-mix(in srgb, var(--info) 15%, transparent);    color: var(--info); }
+.stat-card__value { font-size: var(--fs-2xl); font-weight: 800; color: var(--text); line-height: 1; }
+.stat-card__label { font-size: var(--fs-sm); color: var(--text-muted); margin-top: 4px; }
+
+/* Toolbar (search + filters + sort + add) — Flexbox, wraps on small screens */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-5);
+}
+.toolbar .select { width: auto; min-width: 150px; }
+
+/* ==========================================================================
+   DASHBOARD
+   ========================================================================== */
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-6);
+  border-radius: var(--radius-lg);
+  background: var(--gradient);
+  color: #fff;
+  box-shadow: var(--shadow-primary);
+  margin-bottom: var(--space-6);
+}
+.hero::after {   /* decorative circles */
+  content: "";
+  position: absolute;
+  right: -60px; top: -60px;
+  width: 220px; height: 220px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+.hero h1 { color: #fff; font-size: var(--fs-3xl); }
+.hero p { color: rgba(255, 255, 255, 0.9); margin-top: var(--space-2); position: relative; z-index: 1; }
+.hero .hero__date {
+  display: inline-block;
+  margin-bottom: var(--space-3);
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* Dashboard main layout: content column + sidebar (CSS Grid) */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+.dash-col { display: grid; gap: var(--space-5); }
+
+/* Quote card */
+.quote-card {
+  background: var(--gradient-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  position: relative;
+}
+.quote-card__mark {
+  font-size: 3rem;
+  line-height: 1;
+  color: var(--primary);
+  opacity: 0.35;
+  font-family: Georgia, serif;
+}
+.quote-card blockquote { font-size: var(--fs-lg); font-weight: 600; color: var(--text); margin: var(--space-2) 0; }
+.quote-card cite { color: var(--text-muted); font-style: normal; font-weight: 600; }
+
+/* List rows (today's tasks / upcoming exams) */
+.list { display: flex; flex-direction: column; gap: var(--space-2); }
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  transition: var(--transition-fast);
+}
+.list-item:hover { background: var(--surface-2); border-color: var(--border); }
+.list-item__main { flex: 1; min-width: 0; }
+.list-item__title { font-weight: 600; color: var(--text); }
+.list-item__meta { font-size: var(--fs-xs); color: var(--text-muted); display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: 2px; }
+.list-item.done .list-item__title { text-decoration: line-through; color: var(--text-faint); }
+
+/* Exam countdown pill */
+.countdown {
+  text-align: center;
+  min-width: 58px;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--primary-soft);
+}
+.countdown b { display: block; font-size: var(--fs-lg); color: var(--primary); line-height: 1; }
+.countdown small { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* ==========================================================================
+   PROGRESS RINGS  (used on Dashboard progress card + Progress page)
+   ========================================================================== */
+.ring-wrap { display: grid; place-items: center; position: relative; }
+.ring { transform: rotate(-90deg); }
+.ring__track { fill: none; stroke: var(--surface-3); }
+.ring__bar {
+  fill: none;
+  stroke: url(#ringGradient);
+  stroke-linecap: round;
+  transition: stroke-dashoffset var(--transition-slow);
+}
+.ring__label {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.ring__label b { font-size: var(--fs-2xl); font-weight: 800; color: var(--text); line-height: 1; }
+.ring__label small { font-size: var(--fs-xs); color: var(--text-muted); }
+
+/* Linear progress bar (per-subject) */
+.progress-row { margin-bottom: var(--space-4); }
+.progress-row__top { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: var(--fs-sm); }
+.progress-row__top b { color: var(--text); font-weight: 700; }
+.bar { height: 10px; border-radius: var(--radius-pill); background: var(--surface-3); overflow: hidden; }
+.bar__fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--gradient);
+  width: 0;
+  transition: width var(--transition-slow);
+}
+
+/* ==========================================================================
+   TASKS
+   ========================================================================== */
+.task-list { display: flex; flex-direction: column; gap: var(--space-3); }
+.task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: var(--transition);
+  animation: fadeInUp var(--transition) both;
+}
+.task-item:hover { transform: translateX(4px); box-shadow: var(--shadow-md); }
+.task-item.pri-high   { border-left-color: var(--danger); }
+.task-item.pri-medium { border-left-color: var(--warning); }
+.task-item.pri-low    { border-left-color: var(--success); }
+.task-item.done { opacity: 0.62; }
+.task-item.done .task-item__title { text-decoration: line-through; color: var(--text-muted); }
+.task-item__body { flex: 1; min-width: 0; }
+.task-item__title { font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.task-item__meta { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; font-size: var(--fs-xs); }
+.task-item__notes { font-size: var(--fs-sm); color: var(--text-muted); margin-top: var(--space-2); }
+.task-item__actions { display: flex; gap: 2px; }
+
+/* Overdue accent for the due-date meta */
+.due-overdue { color: var(--danger); font-weight: 700; }
+.due-soon    { color: var(--warning); font-weight: 700; }
+
+/* ==========================================================================
+   SUBJECTS
+   ========================================================================== */
+.subjects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-5);
+}
+.subject-card {
+  position: relative;
+  overflow: hidden;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition), box-shadow var(--transition);
+  animation: fadeInUp var(--transition) both;
+}
+.subject-card:hover { transform: translateY(-5px); box-shadow: var(--shadow-lg); }
+.subject-card__stripe { position: absolute; inset: 0 0 auto 0; height: 6px; }
+.subject-card__icon {
+  width: 48px; height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: var(--space-3);
+  margin-top: var(--space-2);
+}
+.subject-card h3 { margin-bottom: var(--space-1); }
+.subject-card__stats { display: flex; gap: var(--space-4); margin: var(--space-3) 0; }
+.subject-card__stats div b { display: block; font-size: var(--fs-lg); color: var(--text); }
+.subject-card__stats div small { font-size: var(--fs-xs); color: var(--text-muted); }
+.subject-card__foot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-3); }
+
+/* ==========================================================================
+   CALENDAR
+   ========================================================================== */
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-4); flex-wrap: wrap; gap: var(--space-3); }
+.cal-head h2 { min-width: 220px; }
+.cal-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.cal-weekdays span { text-align: center; font-size: var(--fs-xs); font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+}
+.cal-cell {
+  min-height: 104px;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: var(--transition-fast);
+}
+.cal-cell:hover { border-color: var(--purple-200); box-shadow: var(--shadow-sm); }
+.cal-cell.empty { background: transparent; border-color: transparent; }
+.cal-cell.today { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+.cal-cell__num { font-size: var(--fs-sm); font-weight: 700; color: var(--text); align-self: flex-end; }
+.cal-cell.today .cal-cell__num {
+  background: var(--primary); color: #fff;
+  width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%;
+}
+.cal-event {
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #fff;
+  cursor: default;
+}
+.cal-event.exam { background: var(--danger); }
+.cal-event.more { background: var(--surface-3); color: var(--text-muted); }
+.cal-legend { display: flex; gap: var(--space-4); margin-top: var(--space-4); flex-wrap: wrap; font-size: var(--fs-sm); color: var(--text-muted); }
+.cal-legend span { display: flex; align-items: center; gap: 6px; }
+
+/* ==========================================================================
+   NOTES
+   ========================================================================== */
+.notes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-5);
+}
+.note-card {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  transition: transform var(--transition), box-shadow var(--transition);
+  animation: fadeInUp var(--transition) both;
+  min-height: 180px;
+}
+.note-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+.note-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); margin-bottom: var(--space-2); }
+.note-card h3 { font-size: var(--fs-lg); }
+.note-card__content { color: var(--text-body); font-size: var(--fs-sm); flex: 1; white-space: pre-wrap; overflow: hidden; }
+.note-card__foot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-4); font-size: var(--fs-xs); color: var(--text-faint); }
+
+/* ==========================================================================
+   ABOUT
+   ========================================================================== */
+.about-hero { text-align: center; padding: var(--space-6) 0; }
+.about-hero .brand__mark { width: 72px; height: 72px; margin: 0 auto var(--space-4); border-radius: 20px; }
+.about-hero .brand__mark svg { width: 40px; height: 40px; }
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-5);
+}
+.feature-card { text-align: center; }
+.feature-card .stat-card__icon { margin: 0 auto var(--space-3); }
+.tech-list { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
+.tech-list .badge { font-size: var(--fs-sm); padding: 6px 14px; }
