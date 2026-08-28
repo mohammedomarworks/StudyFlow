@@ -89,7 +89,22 @@
   /* ---- Layout -------------------------------------------------------- */
   --navbar-h: 68px;
   --container: 1200px;
+  /* ---- Component sizing --------------------------------------------- */
+--input-h: 44px;
+--button-h: 44px;
+--icon-sm: 16px;
+--icon-md: 20px;
+--icon-lg: 24px;
+
+/* ---- Focus & interaction ------------------------------------------ */
+--focus-ring: 0 0 0 3px rgba(139, 92, 246, 0.22);
+
+/* ---- Glass effect -------------------------------------------------- */
+--glass-bg: rgba(255, 255, 255, 0.06);
+--glass-border: rgba(255, 255, 255, 0.10);
+--glass-blur: 16px;
 }
+
 
 /* ==========================================================================
    DARK THEME — overrides only the tokens that must change.
