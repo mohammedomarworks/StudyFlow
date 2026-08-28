@@ -184,19 +184,41 @@ Learn more about StudyFlow and its purpose as a student productivity application
 🚀 **[Visit StudyFlow](https://mohammedomarworks.github.io/StudyFlow/)**
 
 
-## 🗺️ Roadmap
+---
 
+## 🚀 Roadmap
+
+### Version 1.0.0 ✅
 - [x] Responsive dashboard
 - [x] Task management
 - [x] Subject management
+- [x] Calendar
 - [x] Notes
 - [x] Progress tracking
-- [x] Local Storage
-- [ ] Drag & Drop Tasks
+- [x] Dark mode
+- [x] Local Storage support
+- [x] GitHub Pages deployment
+
+### Version 1.1.0
+- [ ] UI/UX improvements
+- [ ] Better animations
+- [ ] Improved mobile experience
+
+### Version 1.2.0
+- [ ] Drag & Drop task management
+- [ ] Advanced search & filters
+- [ ] Keyboard shortcuts
+
+### Version 1.5.0
 - [ ] Pomodoro Timer
 - [ ] Habit Tracker
-- [ ] Authentication
-- [ ] Cloud Sync
+- [ ] Study session analytics
+
+### Version 2.0.0
+- [ ] User authentication
+- [ ] Cloud synchronization
+- [ ] Database integration
+- [ ] Real-time notifications
 
 ---
 
