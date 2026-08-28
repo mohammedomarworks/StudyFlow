@@ -78,13 +78,21 @@ function render() {
     let shown = chips.slice(0, 3).join('');
     if (chips.length > 3) shown += `<div class="cal-event more">+${chips.length - 3} more</div>`;
 
-    const clickable = (tasks.length || exams.length) ? 'style="cursor:pointer"' : '';
-    cells += `
-      <div class="cal-cell ${isToday ? 'today' : ''}" data-date="${iso}" ${clickable}>
-        <span class="cal-cell__num">${day}</span>
-        ${shown}
-      </div>`;
-  }
+const clickable = (tasks?.length || exams?.length) ? 'style="cursor:pointer"' : '';
+
+cells += `
+  <div
+    class="cal-cell ${isToday ? 'today' : ''}"
+    data-date="${iso}"
+    ${clickable}
+  >
+    <span class="cal-cell__num">
+      ${day}
+    </span>
+
+    ${shown}
+  </div>
+`;}
 
   grid.innerHTML = cells;
 
@@ -99,42 +107,129 @@ function render() {
    ========================================================================== */
 function openDay(iso) {
   const { tasks, exams } = eventsForDate(iso);
-  if (!tasks.length && !exams.length) return;   // nothing to show
 
   App.qs('#dayModalTitle').textContent = Dates.formatLong(iso);
 
   let html = '';
+
+  // Empty day
+  if (!tasks.length && !exams.length) {
+    html = `
+      <div class="empty" style="padding:var(--space-5) 0">
+        <div class="empty__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M9 11l3 3L22 4"/>
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+          </svg>
+        </div>
+
+        <h3>Nothing scheduled</h3>
+        <p>No tasks or exams are scheduled for this day.</p>
+
+        <a href="tasks.html" class="btn btn-primary mt-4">
+          Add Task
+        </a>
+      </div>
+    `;
+
+    App.qs('#dayModalBody').innerHTML = html;
+    App.openModal('#dayModal');
+    return;
+  }
+
+  // Exams
   if (exams.length) {
-    html += `<h4 class="section-title" style="color:var(--danger)">Exams</h4><div class="list">`;
+    html += `
+      <h4 class="section-title" style="color:var(--danger)">
+        Exams
+      </h4>
+
+      <div class="list">
+    `;
+
     html += exams.map(s => `
       <div class="list-item">
-        <span class="dot" style="background:${s.color};width:14px;height:14px"></span>
-        <div class="list-item__main"><div class="list-item__title">${App.escapeHtml(s.name)}</div>
-        <div class="list-item__meta">${s.teacher ? App.escapeHtml(s.teacher) : 'Exam day'}</div></div>
-      </div>`).join('');
-    html += `</div>`;
-  }
-  if (tasks.length) {
-    html += `<h4 class="section-title mt-4">Tasks (${tasks.length})</h4><div class="list">`;
-    html += tasks.map(t => {
-      const subj = Store.getSubject(t.subjectId);
-      return `
-        <div class="list-item ${t.completed ? 'done' : ''}">
-          <span class="dot" style="background:${subj ? subj.color : 'var(--primary)'}"></span>
-          <div class="list-item__main">
-            <div class="list-item__title">${App.escapeHtml(t.title)}</div>
-            <div class="list-item__meta">
-              ${subj ? App.escapeHtml(subj.name) : 'No subject'} ·
-              <span class="priority-${t.priority}">${t.priority}</span>
-              ${t.completed ? '· ✓ done' : ''}
-            </div>
+        <span
+          class="dot"
+          style="background:${s.color};width:14px;height:14px"
+        ></span>
+
+        <div class="list-item__main">
+          <div class="list-item__title">
+            ${App.escapeHtml(s.name)}
           </div>
-        </div>`;
-    }).join('');
+
+          <div class="list-item__meta">
+            ${s.teacher ? App.escapeHtml(s.teacher) : 'Exam day'}
+          </div>
+        </div>
+      </div>
+    `).join('');
+
     html += `</div>`;
   }
 
-  html += `<a href="tasks.html" class="btn btn-primary btn-block mt-6">Manage tasks</a>`;
+  // Tasks
+  if (tasks.length) {
+    html += `
+      <h4 class="section-title ${exams.length ? 'mt-4' : ''}">
+        Tasks (${tasks.length})
+      </h4>
+
+      <div class="list">
+    `;
+
+    html += tasks.map(t => {
+      const subj = Store.getSubject(t.subjectId);
+
+      return `
+        <div class="list-item ${t.completed ? 'done' : ''}">
+          <span
+            class="dot"
+            style="background:${subj ? subj.color : 'var(--primary)'}"
+          ></span>
+
+          <div class="list-item__main">
+
+            <div class="list-item__title">
+              ${App.escapeHtml(t.title)}
+            </div>
+
+            <div class="list-item__meta">
+
+              ${subj
+                ? App.escapeHtml(subj.name)
+                : 'No subject'
+              }
+
+              ·
+
+              <span class="priority-${t.priority}">
+                ${t.priority}
+              </span>
+
+              ${t.completed ? '· ✓ done' : ''}
+
+            </div>
+
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    html += `</div>`;
+  }
+
+  html += `
+    <a
+      href="tasks.html"
+      class="btn btn-primary btn-block mt-6"
+    >
+      Manage tasks
+    </a>
+  `;
+
   App.qs('#dayModalBody').innerHTML = html;
+
   App.openModal('#dayModal');
 }
