@@ -27,45 +27,72 @@ Organize subjects, manage tasks, track progress, write notes, and stay productiv
 </p>
 
 ---
-
 ## ✨ Features
 
-- 📋 Task Management (Add, Edit, Delete)
-- 📚 Subject Management
-- 📅 Study Calendar
-- 📝 Notes Section
-- 📈 Progress Dashboard
-- 🌙 Dark / Light Mode
-- 💾 Local Storage Support
-- 📱 Fully Responsive Design
-- 🔍 Search & Filter
-- ⚡ Smooth User Experience
+- 📋 Create, edit and delete study tasks
+- 📚 Organize subjects with color coding
+- 📅 Interactive academic calendar
+- 📝 Dedicated notes management
+- 📈 Visual study progress tracking
+- 🌙 Dark mode interface
+- 💾 Automatic Local Storage persistence
+- 🔍 Search and filter functionality
+- 📱 Fully responsive design
+- ⚡ Fast and lightweight (No frameworks)
 
 ---
 
 ## 🛠️ Tech Stack
 
-- HTML5
-- CSS3
-- JavaScript (Vanilla)
-- CSS Grid
-- Flexbox
-- Local Storage
-- Public API
+| Technology | Purpose |
+|------------|----------|
+| HTML5 | Page Structure |
+| CSS3 | Styling & Responsive Layout |
+| JavaScript (ES6) | Application Logic |
+| Local Storage API | Data Persistence |
+| REST API | Quotes / External Data |
+| Git | Version Control |
+| GitHub Pages | Deployment |
 
 ---
 
-## 📂 Project Structure
+## 📁 Project Structure
 
 ```text
 StudyFlow/
 │
-├── index.html
-├── pages/
-├── css/
-├── js/
 ├── assets/
-└── README.md
+│   └── screenshots/
+│
+├── css/
+│   ├── base.css
+│   ├── components.css
+│   ├── pages.css
+│   ├── responsive.css
+│   └── variables.css
+│
+├── js/
+│   ├── app.js
+│   ├── dashboard.js
+│   ├── tasks.js
+│   ├── subjects.js
+│   ├── calendar.js
+│   ├── notes.js
+│   ├── progress.js
+│   ├── about.js
+│   └── storage.js
+│
+├── pages/
+│   ├── tasks.html
+│   ├── subjects.html
+│   ├── calendar.html
+│   ├── notes.html
+│   ├── progress.html
+│   └── about.html
+│
+├── index.html
+├── README.md
+└── LICENSE
 ```
 
 ---
@@ -155,6 +182,7 @@ Learn more about StudyFlow and its purpose as a student productivity application
 ## 🌐 Live Demo
 
 🚀 **[Visit StudyFlow](https://mohammedomarworks.github.io/StudyFlow/)**
+
 
 ## 🗺️ Roadmap
 
