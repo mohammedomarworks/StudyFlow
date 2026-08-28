@@ -1,14 +1,14 @@
 /* ==========================================================================
    calendar.js — Calendar page logic
-   Builds a monthly grid; plots tasks (subject color) and exams (red) on their
-   dates; supports month navigation and a per-day detail modal.
+   Builds a monthly grid; plots tasks (subject color, priority, done status) and
+   exams on their dates; supports month navigation and an interactive per-day modal.
    ========================================================================== */
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
                 'July', 'August', 'September', 'October', 'November', 'December'];
 
-// Current view — start on the month containing today.
-const cal = { year: 0, month: 0 };
+// Current view — start on the month containing today
+const cal = { year: 0, month: 0, activeDayISO: null };
 
 document.addEventListener('DOMContentLoaded', () => {
   const now = new Date();
@@ -57,46 +57,38 @@ function render() {
 
   let cells = '';
 
-  // Leading blanks so the 1st lands under the right weekday.
+  // Leading blanks so 1st day lands on the correct weekday
   for (let i = 0; i < firstWeekday; i++) cells += `<div class="cal-cell empty"></div>`;
 
-  // One cell per day.
+  // One cell per day
   for (let day = 1; day <= daysInMonth; day++) {
     const iso = `${cal.year}-${String(cal.month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const { tasks, exams } = eventsForDate(iso);
     const isToday = iso === today;
 
-    // Build up to 3 event chips, then a "+N more".
+    // Event chips
     const chips = [];
     exams.forEach(s => chips.push(`<div class="cal-event exam" title="Exam: ${App.escapeHtml(s.name)}">📚 ${App.escapeHtml(s.name)}</div>`));
     tasks.forEach(t => {
       const subj = Store.getSubject(t.subjectId);
       const color = subj ? subj.color : 'var(--primary)';
-      chips.push(`<div class="cal-event" style="background:${color}" title="${App.escapeHtml(t.title)}">${App.escapeHtml(t.title)}</div>`);
+      const doneClass = t.completed ? 'style="opacity:0.6;text-decoration:line-through;background:' + color + '"' : 'style="background:' + color + '"';
+      chips.push(`<div class="cal-event" ${doneClass} title="${App.escapeHtml(t.title)}">${t.completed ? '✓ ' : ''}${App.escapeHtml(t.title)}</div>`);
     });
 
     let shown = chips.slice(0, 3).join('');
     if (chips.length > 3) shown += `<div class="cal-event more">+${chips.length - 3} more</div>`;
 
-const clickable = (tasks?.length || exams?.length) ? 'style="cursor:pointer"' : '';
-
-cells += `
-  <div
-    class="cal-cell ${isToday ? 'today' : ''}"
-    data-date="${iso}"
-    ${clickable}
-  >
-    <span class="cal-cell__num">
-      ${day}
-    </span>
-
-    ${shown}
-  </div>
-`;}
+    cells += `
+      <div class="cal-cell ${isToday ? 'today' : ''}" data-date="${iso}" style="cursor:pointer" title="Click to view details for ${Dates.formatShort(iso)}">
+        <span class="cal-cell__num">${day}</span>
+        ${shown}
+      </div>`;
+  }
 
   grid.innerHTML = cells;
 
-  // Clicking a day with events opens the detail modal.
+  // Click any cell to open day detail modal
   App.qsa('.cal-cell[data-date]', grid).forEach(cell => {
     cell.addEventListener('click', () => openDay(cell.dataset.date));
   });
@@ -106,6 +98,7 @@ cells += `
    Day detail modal
    ========================================================================== */
 function openDay(iso) {
+  cal.activeDayISO = iso;
   const { tasks, exams } = eventsForDate(iso);
 
   App.qs('#dayModalTitle').textContent = Dates.formatLong(iso);
@@ -122,16 +115,10 @@ function openDay(iso) {
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
           </svg>
         </div>
-
         <h3>Nothing scheduled</h3>
         <p>No tasks or exams are scheduled for this day.</p>
-
-        <a href="tasks.html" class="btn btn-primary mt-4">
-          Add Task
-        </a>
-      </div>
-    `;
-
+        <a href="tasks.html" class="btn btn-primary mt-4">Add Task in Tasks View</a>
+      </div>`;
     App.qs('#dayModalBody').innerHTML = html;
     App.openModal('#dayModal');
     return;
@@ -140,31 +127,20 @@ function openDay(iso) {
   // Exams
   if (exams.length) {
     html += `
-      <h4 class="section-title" style="color:var(--danger)">
-        Exams
-      </h4>
-
-      <div class="list">
-    `;
+      <h4 class="section-title" style="color:var(--danger)">Exams (${exams.length})</h4>
+      <div class="list">`;
 
     html += exams.map(s => `
       <div class="list-item">
-        <span
-          class="dot"
-          style="background:${s.color};width:14px;height:14px"
-        ></span>
-
+        <span class="dot" style="background:${s.color};width:14px;height:14px"></span>
         <div class="list-item__main">
-          <div class="list-item__title">
-            ${App.escapeHtml(s.name)}
-          </div>
-
+          <div class="list-item__title">${App.escapeHtml(s.name)}</div>
           <div class="list-item__meta">
-            ${s.teacher ? App.escapeHtml(s.teacher) : 'Exam day'}
+            <span>${s.teacher ? App.escapeHtml(s.teacher) : 'Exam day'}</span>
           </div>
         </div>
-      </div>
-    `).join('');
+        <span class="badge badge-primary">Exam</span>
+      </div>`).join('');
 
     html += `</div>`;
   }
@@ -172,64 +148,47 @@ function openDay(iso) {
   // Tasks
   if (tasks.length) {
     html += `
-      <h4 class="section-title ${exams.length ? 'mt-4' : ''}">
-        Tasks (${tasks.length})
-      </h4>
-
-      <div class="list">
-    `;
+      <h4 class="section-title ${exams.length ? 'mt-4' : ''}">Tasks (${tasks.length})</h4>
+      <div class="list" id="dayModalTaskList">`;
 
     html += tasks.map(t => {
       const subj = Store.getSubject(t.subjectId);
-
       return `
-        <div class="list-item ${t.completed ? 'done' : ''}">
-          <span
-            class="dot"
-            style="background:${subj ? subj.color : 'var(--primary)'}"
-          ></span>
-
+        <label class="list-item ${t.completed ? 'done' : ''}" style="cursor:pointer">
+          <input type="checkbox" class="check" data-modal-toggle="${t.id}" ${t.completed ? 'checked' : ''} aria-label="Mark task complete" />
           <div class="list-item__main">
-
-            <div class="list-item__title">
-              ${App.escapeHtml(t.title)}
-            </div>
-
+            <div class="list-item__title">${App.escapeHtml(t.title)}</div>
             <div class="list-item__meta">
-
-              ${subj
-                ? App.escapeHtml(subj.name)
-                : 'No subject'
-              }
-
-              ·
-
-              <span class="priority-${t.priority}">
-                ${t.priority}
-              </span>
-
-              ${t.completed ? '· ✓ done' : ''}
-
+              ${subj ? `<span><span class="dot" style="background:${subj.color}"></span>${App.escapeHtml(subj.name)}</span>` : '<span>No subject</span>'}
+              <span class="priority-${t.priority}">● ${t.priority}</span>
+              ${t.category && t.category !== 'General' ? `<span class="badge badge-category">${App.escapeHtml(t.category)}</span>` : ''}
+              ${t.estimate ? `<span class="badge badge-estimate">⏱️ ${Dates.formatDuration(t.estimate)}</span>` : ''}
+              ${t.completed ? '<span class="text-success font-bold">✓ Done</span>' : ''}
             </div>
-
           </div>
-        </div>
-      `;
+        </label>`;
     }).join('');
 
     html += `</div>`;
   }
 
   html += `
-    <a
-      href="tasks.html"
-      class="btn btn-primary btn-block mt-6"
-    >
-      Manage tasks
-    </a>
-  `;
+    <div class="flex-between wrap gap-2 mt-6">
+      <a href="tasks.html" class="btn btn-ghost">View All Tasks</a>
+      <a href="tasks.html" class="btn btn-primary">+ Add Task</a>
+    </div>`;
 
   App.qs('#dayModalBody').innerHTML = html;
+
+  // Wire interactive checkboxes inside day modal
+  App.qsa('[data-modal-toggle]', App.qs('#dayModalBody')).forEach(cb => {
+    cb.addEventListener('change', () => {
+      const isDone = Store.toggleTask(cb.dataset.modalToggle);
+      if (isDone) App.playChime('finish');
+      render();
+      openDay(iso); // Refresh modal view
+    });
+  });
 
   App.openModal('#dayModal');
 }

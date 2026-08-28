@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudyFlow — Focus Timer</title>
+  <meta name="description" content="Stay focused and boost productivity with the StudyFlow Pomodoro & Focus Timer." />
+  <script>
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('sp_settings') || '{}');
+        var pref = s.theme || 'system';
+        var actual = pref === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+        document.documentElement.setAttribute('data-theme', actual);
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link rel="stylesheet" href="../css/pages.css" />
+  <link rel="stylesheet" href="../css/responsive.css" />
+</head>
+
+<body data-page="timer">
+
+  <!-- ===================== NAVBAR ===================== -->
+  <nav class="navbar">
+    <div class="navbar__inner">
+      <a href="../index.html" class="brand" aria-label="StudyFlow Home">
+        <span class="brand__mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1 2 3 6 3s6-2 6-3v-5" /></svg>
+        </span>
+        <span>Study<b>Flow</b></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" data-nav="dashboard">Dashboard</a></li>
+        <li><a href="subjects.html" data-nav="subjects">Subjects</a></li>
+        <li><a href="tasks.html" data-nav="tasks">Tasks</a></li>
+        <li><a href="calendar.html" data-nav="calendar">Calendar</a></li>
+        <li><a href="timer.html" data-nav="timer">Focus Timer</a></li>
+        <li><a href="progress.html" data-nav="progress">Progress</a></li>
+        <li><a href="notes.html" data-nav="notes">Notes</a></li>
+        <li><a href="settings.html" data-nav="settings">Settings</a></li>
+        <li><a href="about.html" data-nav="about">About</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="nav-search-btn" aria-label="Search StudyFlow (Cmd+K)" title="Search (Cmd+K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span>Search</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <button class="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+        </button>
+        <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <main class="page">
+    <div class="container">
+      <div class="page-header flex-between wrap gap-4">
+        <div>
+          <h1>Focus Timer</h1>
+          <p>Boost deep work with the Pomodoro technique. Log study sessions directly to your progress stats.</p>
+        </div>
+        <a href="settings.html" class="btn btn-ghost" title="Customize timer lengths in Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          Timer Settings
+        </a>
+      </div>
+
+      <div class="grid two-col" style="align-items:start">
+        <!-- Main Timer Card -->
+        <div class="card timer-card">
+          <!-- Mode Tabs -->
+          <div class="timer-modes" id="timerModes">
+            <button type="button" class="btn btn-ghost btn-sm timer-mode-btn active" data-mode="pomodoro">Focus</button>
+            <button type="button" class="btn btn-ghost btn-sm timer-mode-btn" data-mode="shortBreak">Short Break</button>
+            <button type="button" class="btn btn-ghost btn-sm timer-mode-btn" data-mode="longBreak">Long Break</button>
+          </div>
+
+          <!-- Subject & Task Selection Context -->
+          <div class="form-row mt-4" style="width:100%; max-width:440px">
+            <div class="field" style="margin-bottom:0">
+              <label style="font-size:var(--fs-xs)">Subject</label>
+              <select class="select" id="timerSubject" aria-label="Select subject for focus session">
+                <option value="">— General Study —</option>
+              </select>
+            </div>
+            <div class="field" style="margin-bottom:0">
+              <label style="font-size:var(--fs-xs)">Linked Task (Optional)</label>
+              <select class="select" id="timerTask" aria-label="Select task to focus on">
+                <option value="">— No specific task —</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Circular SVG Countdown Display -->
+          <div class="timer-circle-wrap mt-6">
+            <div class="timer-circle" id="timerCircle">
+              <svg class="ring" width="260" height="260" viewBox="0 0 260 260">
+                <defs>
+                  <linearGradient id="timerGradient" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stop-color="#7c3aed"/>
+                    <stop offset="100%" stop-color="#a855f7"/>
+                  </linearGradient>
+                </defs>
+                <circle class="ring__track" cx="130" cy="130" r="114" stroke-width="12" />
+                <circle class="ring__bar" id="timerBar" cx="130" cy="130" r="114" stroke-width="12"
+                        stroke-dasharray="716.28" stroke-dashoffset="0" stroke="url(#timerGradient)" />
+              </svg>
+              <div class="timer-display">
+                <span class="timer-time" id="timerDisplay">25:00</span>
+                <span class="timer-sublabel" id="timerStatusLabel">Ready to Focus</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="timer-controls mt-6 flex gap-3">
+            <button class="btn btn-primary btn-lg" id="timerToggleBtn">
+              <svg id="timerPlayIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <span id="timerToggleText">Start Focus</span>
+            </button>
+            <button class="btn btn-ghost" id="timerResetBtn" title="Reset timer">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              Reset
+            </button>
+            <button class="btn btn-ghost" id="timerSkipBtn" title="Skip to next session">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+              Skip
+            </button>
+          </div>
+        </div>
+
+        <!-- Today's Session History Card -->
+        <div class="card">
+          <div class="card__head flex-between">
+            <h2 class="card__title">Today's Focus Log</h2>
+            <span class="badge badge-primary" id="todayFocusBadge">0m today</span>
+          </div>
+          <div id="sessionHistoryList" class="activity-feed" style="max-height:480px; overflow-y:auto"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">Made with <b>StudyFlow</b> · © <span data-year></span></footer>
+
+  <script src="../js/storage.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/timer.js"></script>
+</body>
+</html>

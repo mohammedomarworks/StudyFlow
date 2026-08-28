@@ -1,13 +1,15 @@
 /* ==========================================================================
    progress.js — Progress page logic
    Renders: overall completion ring, summary stat tiles, per-subject progress
-   bars, and a task-by-priority breakdown. All values derived from Store.
+   bars, task-by-priority breakdown, focus session analytics, and chronological activity history.
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
   renderOverall();
   renderSubjectProgress();
   renderPriorityBreakdown();
+  renderFocusAnalytics();
+  renderActivityTimeline();
 });
 
 /* ==========================================================================
@@ -35,17 +37,21 @@ function renderOverall() {
     App.qs('#overallRing .ring__bar').style.strokeDashoffset = circ * (1 - s.completionRate / 100);
   });
 
-  // Summary tiles.
+  // Summary tiles
   const tiles = [
-    { label: 'Total Tasks', value: s.total,     cls: '' },
-    { label: 'Completed',   value: s.completed, cls: 'green' },
-    { label: 'Pending',     value: s.pending,   cls: 'orange' },
-    { label: 'Overdue',     value: s.overdue,   cls: 'blue' }
+    { label: 'Total Tasks', value: s.total,     cls: '',                                             icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
+    { label: 'Completed',   value: s.completed, cls: 'green',                                        icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
+    { label: 'Pending',     value: s.pending,   cls: 'orange',                                       icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { label: 'Overdue',     value: s.overdue,   cls: s.overdue > 0 ? 'orange' : '', isOverdue: s.overdue > 0, icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>' }
   ];
+
   App.qs('#overallTiles').innerHTML = tiles.map(t => `
-    <div class="stat-card">
+    <div class="stat-card ${t.isOverdue ? 'is-overdue' : ''}">
+      <div class="stat-card__icon ${t.cls}" style="${t.isOverdue ? 'color:var(--danger);background:rgba(239,68,68,0.15)' : ''}">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
+      </div>
       <div>
-        <div class="stat-card__value ${t.cls === 'green' ? '' : ''}">${t.value}</div>
+        <div class="stat-card__value" style="${t.isOverdue ? 'color:var(--danger)' : ''}">${t.value}</div>
         <div class="stat-card__label">${t.label}</div>
       </div>
     </div>`).join('');
@@ -55,24 +61,31 @@ function renderOverall() {
    Per-subject progress bars
    ========================================================================== */
 function renderSubjectProgress() {
-  const subjects = Store.getSubjectProgress().filter(s => s.totalTasks > 0);
+  const subjects = Store.getSubjectProgress();
   const box = App.qs('#subjectProgress');
 
   if (!subjects.length) {
-    box.innerHTML = `<p class="text-muted text-center" style="padding:var(--space-5) 0">No tasks assigned to subjects yet.</p>`;
+    box.innerHTML = `<p class="text-muted text-center" style="padding:var(--space-5) 0">No subjects created yet.</p>`;
     return;
   }
 
   box.innerHTML = subjects.map(s => `
-    <div class="progress-row">
-      <div class="progress-row__top">
-        <span><span class="dot" style="background:${s.color};display:inline-block;margin-right:6px"></span>${App.escapeHtml(s.name)}</span>
-        <b>${s.doneTasks}/${s.totalTasks} · ${s.percent}%</b>
+    <div class="progress-row" style="margin-bottom:var(--space-4)">
+      <div class="progress-row__top flex-between">
+        <span>
+          <span class="dot" style="background:${s.color};display:inline-block;margin-right:6px"></span>
+          <b>${App.escapeHtml(s.name)}</b>
+        </span>
+        <span class="text-muted" style="font-size:var(--fs-sm)">${s.doneTasks}/${s.totalTasks} done (${s.percent}%)</span>
       </div>
-      <div class="bar"><div class="bar__fill" data-pct="${s.percent}" style="width:0"></div></div>
+      <div class="bar"><div class="bar__fill" data-pct="${s.percent}" style="width:0; background:${s.color}"></div></div>
+      <div class="flex wrap gap-2 mt-1" style="font-size:var(--fs-xs); color:var(--text-muted)">
+        <span>📝 ${s.notesCount} note${s.notesCount === 1 ? '' : 's'}</span>
+        ${s.focusMinutes > 0 ? `<span>· ⏱️ ${Dates.formatDuration(s.focusMinutes)} study</span>` : ''}
+        ${s.overdueTasks > 0 ? `<span class="text-danger font-bold">· ⚠️ ${s.overdueTasks} overdue</span>` : ''}
+      </div>
     </div>`).join('');
 
-  // Animate bars to their target width after paint.
   requestAnimationFrame(() => {
     App.qsa('#subjectProgress .bar__fill').forEach(el => { el.style.width = el.dataset.pct + '%'; });
   });
@@ -101,10 +114,10 @@ function renderPriorityBreakdown() {
     const done = all.filter(t => t.completed).length;
     const pct = all.length ? Math.round((done / all.length) * 100) : 0;
     return `
-      <div class="progress-row">
-        <div class="progress-row__top">
+      <div class="progress-row" style="margin-bottom:var(--space-4)">
+        <div class="progress-row__top flex-between">
           <span><span class="dot" style="background:${l.color};display:inline-block;margin-right:6px"></span>${l.label}</span>
-          <b>${done}/${all.length} done</b>
+          <b>${done}/${all.length} done (${pct}%)</b>
         </div>
         <div class="bar"><div class="bar__fill" data-pct="${pct}" style="width:0; background:${l.color}"></div></div>
       </div>`;
@@ -114,3 +127,89 @@ function renderPriorityBreakdown() {
     App.qsa('#priorityBreakdown .bar__fill').forEach(el => { el.style.width = el.dataset.pct + '%'; });
   });
 }
+
+/* ==========================================================================
+   Focus Time Analytics
+   ========================================================================== */
+function renderFocusAnalytics() {
+  const study = Store.getStudyStats();
+  const box = App.qs('#focusAnalytics');
+
+  box.innerHTML = `
+    <div class="stats-grid" style="grid-template-columns: repeat(2, 1fr); margin-bottom:var(--space-4)">
+      <div class="stat-card">
+        <div class="stat-card__icon green">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <div>
+          <div class="stat-card__value">${Dates.formatDuration(study.totalMinutes)}</div>
+          <div class="stat-card__label">Total Focus Time</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card__icon blue">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+        </div>
+        <div>
+          <div class="stat-card__value">${study.totalSessions}</div>
+          <div class="stat-card__label">Completed Sessions</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card__icon orange">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 14 10"/></svg>
+        </div>
+        <div>
+          <div class="stat-card__value">${Dates.formatDuration(study.todayMinutes)}</div>
+          <div class="stat-card__label">Focus Today</div>
+        </div>
+      </div>
+
+      <div class="stat-card">
+        <div class="stat-card__icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+        </div>
+        <div>
+          <div class="stat-card__value">${study.streakDays} ${study.streakDays === 1 ? 'day' : 'days'}</div>
+          <div class="stat-card__label">Study Streak</div>
+        </div>
+      </div>
+    </div>
+    <p class="text-muted text-center" style="font-size:var(--fs-sm)">
+      Start a Pomodoro or customized timer in the <a href="timer.html" class="text-primary font-bold">Focus Timer</a> to log more study sessions.
+    </p>`;
+}
+
+/* ==========================================================================
+   Chronological Activity Timeline
+   ========================================================================== */
+function renderActivityTimeline() {
+  const activities = Store.getActivity(15);
+  const box = App.qs('#activityTimeline');
+
+  if (!activities.length) {
+    box.innerHTML = `<p class="text-muted text-center" style="padding:var(--space-5) 0">No activity recorded yet.</p>`;
+    return;
+  }
+
+  const icons = {
+    task_complete: '✅',
+    task_create: '📋',
+    task_delete: '🗑️',
+    session_finish: '⏱️',
+    note_create: '📝',
+    subject_create: '📚'
+  };
+
+  box.innerHTML = activities.map(a => `
+    <div class="activity-item">
+      <div class="activity-icon">${icons[a.type] || '📌'}</div>
+      <div class="activity-content">
+        <div class="activity-title">${App.escapeHtml(a.title)}</div>
+        <div class="activity-time">${Dates.timeAgo(a.timestamp)} (${Dates.formatFull(a.timestamp.slice(0,10))})</div>
+      </div>
+    </div>`).join('');
+}
+

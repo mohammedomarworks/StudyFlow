@@ -1,7 +1,7 @@
 /* ==========================================================================
    responsive.css — Breakpoints
    The layouts above are built mobile-friendly with auto-fit grids; this file
-   handles the deliberate breakpoints: navbar → hamburger, multi-column grids
+   handles deliberate breakpoints: navbar → hamburger, multi-column grids
    collapsing, and spacing tweaks for small screens.
    Breakpoints: 1024px (tablet-landscape) · 768px (tablet) · 560px (phone)
    ========================================================================== */
@@ -10,6 +10,7 @@
 @media (max-width: 1024px) {
   .dash-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .timer-view-grid { grid-template-columns: 1fr; }
 }
 
 /* ---- <= 768px : mobile navbar (hamburger) + single-column layouts -------- */
@@ -23,6 +24,8 @@
     top: var(--navbar-h);
     left: 0;
     right: 0;
+    max-height: calc(100vh - var(--navbar-h));
+    overflow-y: auto;
     flex-direction: column;
     align-items: stretch;
     gap: 4px;
@@ -43,13 +46,19 @@
   }
   .nav-links a { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); }
 
+  .nav-search-btn span { display: none; }
+  .nav-search-btn kbd { display: none; }
+  .nav-search-btn { padding: 8px; border-radius: 12px; }
+
   .form-row { grid-template-columns: 1fr; }
 
   .hero h1 { font-size: var(--fs-2xl); }
   h1 { font-size: var(--fs-2xl); }
 
   .toolbar .search { min-width: 100%; order: -1; }
-  .toolbar .select { flex: 1; }
+  .toolbar .select { flex: 1; min-width: 130px; }
+
+  .timer-session-pickers { grid-template-columns: 1fr; }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
@@ -69,4 +78,8 @@
 
   .toast-wrap { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }
   .toast { min-width: 0; width: 100%; }
+
+  .quick-actions-bar { grid-template-columns: 1fr 1fr; }
+  .timer-stats-row { grid-template-columns: 1fr; }
 }
+

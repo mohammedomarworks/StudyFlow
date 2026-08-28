@@ -1,10 +1,10 @@
 /* ==========================================================================
    subjects.js — Subjects page logic
    Features: Add · Edit · Delete (with safe unlink) · color picker ·
-   per-subject task counts & progress · exam countdown.
+   per-subject task counts, overdue counts, notes count, study time & progress ·
+   exam countdown · quick actions.
    ========================================================================== */
 
-// Preset colors offered in the picker.
 const COLORS = ['#7c3aed', '#2563eb', '#0d9488', '#db2777', '#ea580c', '#16a34a', '#dc2626', '#0891b2'];
 let selectedColor = COLORS[0];
 
@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
    Render the grid of subject cards
    ========================================================================== */
 function render() {
-  const subjects = Store.getSubjectProgress();   // subjects + task counts
+  const subjects = Store.getSubjectProgress();
   const grid = App.qs('#subjectsGrid');
 
   if (!subjects.length) {
@@ -27,7 +27,7 @@ function render() {
       <div class="empty" style="grid-column:1/-1">
         <div class="empty__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/></svg></div>
         <h3>No subjects yet</h3>
-        <p>Add your first subject to start organizing tasks and notes.</p>
+        <p>Add your courses to start organizing tasks, notes, and study sessions.</p>
         <button class="btn btn-primary mt-4" data-empty-add><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg> Add Subject</button>
       </div>`;
     const b = App.qs('[data-empty-add]');
@@ -39,12 +39,12 @@ function render() {
     const initial = s.name.trim().charAt(0).toUpperCase();
     const examDays = s.examDate ? Dates.daysFromToday(s.examDate) : null;
 
-    // Exam badge: upcoming (primary), today (warning), passed (muted), or none.
+    // Exam badge
     let examBadge = `<span class="badge badge-muted">No exam set</span>`;
     if (examDays !== null) {
-      if (examDays > 0)      examBadge = `<span class="badge badge-primary">Exam in ${examDays} day${examDays === 1 ? '' : 's'}</span>`;
+      if (examDays > 0)        examBadge = `<span class="badge badge-primary">Exam in ${examDays} day${examDays === 1 ? '' : 's'}</span>`;
       else if (examDays === 0) examBadge = `<span class="badge badge-warning">Exam today!</span>`;
-      else                    examBadge = `<span class="badge badge-muted">Exam passed</span>`;
+      else                      examBadge = `<span class="badge badge-muted">Exam passed</span>`;
     }
 
     return `
@@ -53,26 +53,44 @@ function render() {
         <div class="flex-between">
           <div class="subject-card__icon" style="background:${s.color}">${App.escapeHtml(initial)}</div>
           <div class="task-item__actions">
-            <button class="icon-btn" data-edit title="Edit"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
-            <button class="icon-btn danger" data-delete title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg></button>
+            <button class="icon-btn" data-edit title="Edit Subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></button>
+            <button class="icon-btn danger" data-delete title="Delete Subject"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg></button>
           </div>
         </div>
+
         <h3>${App.escapeHtml(s.name)}</h3>
-        <p class="text-muted" style="font-size:var(--fs-sm)">${s.teacher ? App.escapeHtml(s.teacher) : '—'}</p>
+        <p class="text-muted" style="font-size:var(--fs-sm);margin-bottom:var(--space-2)">${s.teacher ? App.escapeHtml(s.teacher) : 'No instructor specified'}</p>
+
+        <!-- Informative Badges -->
+        <div class="flex wrap gap-2" style="margin-bottom:var(--space-3)">
+          <span class="subject-badge-count">📝 ${s.notesCount} note${s.notesCount === 1 ? '' : 's'}</span>
+          ${s.focusMinutes > 0 ? `<span class="subject-badge-count">⏱️ ${Dates.formatDuration(s.focusMinutes)} focus</span>` : ''}
+          ${s.overdueTasks > 0 ? `<span class="badge badge-overdue">⚠️ ${s.overdueTasks} overdue</span>` : ''}
+        </div>
+
         <div class="subject-card__stats">
           <div><b>${s.totalTasks}</b><small>tasks</small></div>
           <div><b>${s.doneTasks}</b><small>done</small></div>
           <div><b>${s.percent}%</b><small>progress</small></div>
         </div>
+
         <div class="bar"><div class="bar__fill" style="width:0"></div></div>
+
         <div class="subject-card__foot">
           ${examBadge}
           ${s.examDate ? `<small class="text-faint">${Dates.formatFull(s.examDate)}</small>` : ''}
         </div>
+
+        <!-- Quick actions -->
+        <div class="subject-card__actions">
+          <a href="tasks.html?subject=${s.id}" class="btn btn-ghost btn-sm" style="flex:1">View Tasks</a>
+          <a href="timer.html?subjectId=${s.id}" class="btn btn-ghost btn-sm" title="Focus session on this subject">⏱️ Focus</a>
+          <a href="notes.html?subject=${s.id}" class="btn btn-ghost btn-sm" title="Notes for this subject">📝 Notes</a>
+        </div>
       </div>`;
   }).join('');
 
-  // Animate progress bars after paint.
+  // Animate progress bars after paint
   requestAnimationFrame(() => {
     App.qsa('.subject-card').forEach((card, i) => {
       card.querySelector('.bar__fill').style.width = subjects[i].percent + '%';
@@ -95,7 +113,7 @@ function wireCards() {
       App.confirm({
         title: 'Delete subject?',
         message: `"${subject.name}" will be removed.` +
-          (taskCount ? ` Its ${taskCount} task${taskCount === 1 ? '' : 's'} will be kept but unlinked from any subject.` : ''),
+          (taskCount ? ` Its ${taskCount} task${taskCount === 1 ? '' : 's'} will be kept safely, unlinked from any subject.` : ''),
         confirmText: 'Delete',
         onConfirm: () => { Store.deleteSubject(id); App.toast('Subject deleted', 'info'); render(); }
       });
@@ -161,7 +179,6 @@ function handleSubmit(e) {
   e.preventDefault();
   const name = App.qs('#subjectName').value.trim();
 
-  // Validation: name is required.
   if (name.length < 1) {
     App.qs('#fs-name').classList.add('invalid');
     App.toast('Please enter a subject name', 'error');
@@ -182,3 +199,4 @@ function handleSubmit(e) {
   App.toast(id ? 'Subject updated' : 'Subject added', 'success');
   render();
 }
+

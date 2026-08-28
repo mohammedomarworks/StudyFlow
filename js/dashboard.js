@@ -1,17 +1,30 @@
 /* ==========================================================================
    dashboard.js — Dashboard page logic
-   Renders: time-based greeting, study statistics, an animated progress ring,
-   today's tasks (with inline complete toggle), upcoming exams, and the quote.
+   Renders: greeting & date, dynamic task statistics, completion ring,
+   today's tasks (with inline complete toggle), upcoming tasks (next 7 days),
+   upcoming exams with countdown, subject progress overview, recent activity,
+   daily motivational quote, and quick add modals.
    ========================================================================== */
+
+const COLORS = ['#7c3aed', '#2563eb', '#0d9488', '#db2777', '#ea580c', '#16a34a', '#dc2626', '#0891b2'];
+let selectedColor = COLORS[0];
 
 document.addEventListener('DOMContentLoaded', () => {
   renderHero();
+  renderAllDashboardData();
+  bindDashboardModals();
+});
+
+function renderAllDashboardData() {
   renderStats();
   renderProgressRing();
   renderTodayTasks();
+  renderUpcomingTasks();
   renderUpcomingExams();
+  renderSubjectProgress();
+  renderActivity();
   renderQuote();
-});
+}
 
 /* ---- Hero greeting + date ------------------------------------------------ */
 function renderHero() {
@@ -25,18 +38,19 @@ function renderHero() {
 function renderStats() {
   const s = Store.getStats();
   const cards = [
-    { label: 'Total Tasks',    value: s.total,         cls: '',       icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
-    { label: 'Completed',      value: s.completed,     cls: 'green',  icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
-    { label: 'Due Today',      value: s.dueToday,      cls: 'orange', icon: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>' },
-    { label: 'Upcoming Exams', value: s.upcomingExams, cls: 'blue',   icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' }
+    { label: 'Total Tasks',    value: s.total,     cls: '',                                          icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
+    { label: 'Completed',      value: s.completed, cls: 'green',                                     icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
+    { label: 'Active',         value: s.pending,   cls: 'orange',                                    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { label: 'Overdue',        value: s.overdue,   cls: s.overdue > 0 ? 'orange' : '', isOverdue: s.overdue > 0, icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' }
   ];
+
   App.qs('#statsGrid').innerHTML = cards.map((c, i) => `
-    <div class="stat-card animate-in" style="--delay:${i * 60}ms">
-      <div class="stat-card__icon ${c.cls}">
+    <div class="stat-card animate-in ${c.isOverdue ? 'is-overdue' : ''}" style="--delay:${i * 50}ms">
+      <div class="stat-card__icon ${c.cls}" style="${c.isOverdue ? 'color:var(--danger);background:rgba(239,68,68,0.15)' : ''}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
       </div>
       <div>
-        <div class="stat-card__value">${c.value}</div>
+        <div class="stat-card__value" style="${c.isOverdue ? 'color:var(--danger)' : ''}">${c.value}</div>
         <div class="stat-card__label">${c.label}</div>
       </div>
     </div>`).join('');
@@ -61,13 +75,14 @@ function renderProgressRing() {
     </svg>
     <div class="ring__label"><b>${completionRate}%</b><small>complete</small></div>`;
 
-  // Animate the bar from empty to its value on the next frame.
   const bar = App.qs('#progressRing .ring__bar');
-  requestAnimationFrame(() => { bar.style.strokeDashoffset = circ * (1 - completionRate / 100); });
+  requestAnimationFrame(() => {
+    bar.style.strokeDashoffset = circ * (1 - completionRate / 100);
+  });
 
-  App.qs('#progressSummary').innerHTML =
-    total ? `<b style="color:var(--text)">${completed}</b> of <b style="color:var(--text)">${total}</b> tasks completed`
-          : 'No tasks yet — add some to track progress.';
+  App.qs('#progressSummary').innerHTML = total
+    ? `<b style="color:var(--text)">${completed}</b> of <b style="color:var(--text)">${total}</b> tasks completed`
+    : 'No tasks yet — click <b>Add Task</b> to get started.';
 }
 
 /* ---- Today's tasks (inline complete toggle) ------------------------------ */
@@ -75,11 +90,12 @@ function renderTodayTasks() {
   const today = Dates.todayISO();
   const tasks = Store.getTasks()
     .filter(t => t.dueDate === today)
-    .sort((a, b) => a.completed - b.completed);   // pending first
+    .sort((a, b) => a.completed - b.completed);
+
   const box = App.qs('#todayTasks');
 
   if (!tasks.length) {
-    box.innerHTML = emptyState('You have no tasks due today. Enjoy the breather! 🎉');
+    box.innerHTML = emptyState('You have no tasks due today. Great job or time to plan ahead! 🎉');
     return;
   }
 
@@ -87,34 +103,75 @@ function renderTodayTasks() {
     const subject = Store.getSubject(t.subjectId);
     return `
       <label class="list-item ${t.completed ? 'done' : ''}">
-        <input type="checkbox" class="check" data-toggle="${t.id}" ${t.completed ? 'checked' : ''} />
+        <input type="checkbox" class="check" data-toggle="${t.id}" ${t.completed ? 'checked' : ''} aria-label="Mark task complete" />
         <div class="list-item__main">
           <div class="list-item__title">${App.escapeHtml(t.title)}</div>
           <div class="list-item__meta">
             ${subject ? `<span><span class="dot" style="background:${subject.color};display:inline-block;margin-right:4px"></span>${App.escapeHtml(subject.name)}</span>` : ''}
+            <span class="priority-${t.priority}">● ${t.priority}</span>
+            ${t.category && t.category !== 'General' ? `<span class="badge badge-category">${App.escapeHtml(t.category)}</span>` : ''}
+            ${t.estimate ? `<span class="badge badge-estimate">⏱️ ${Dates.formatDuration(t.estimate)}</span>` : ''}
+          </div>
+        </div>
+      </label>`;
+  }).join('');
+
+  App.qsa('[data-toggle]', box).forEach(cb => {
+    cb.addEventListener('change', () => {
+      const isDone = Store.toggleTask(cb.dataset.toggle);
+      if (isDone) App.playChime('finish');
+      renderAllDashboardData();
+    });
+  });
+}
+
+/* ---- Upcoming tasks (Next 7 days, excluding today) ----------------------- */
+function renderUpcomingTasks() {
+  const today = Dates.todayISO();
+  const next7Days = Dates.offsetISO(7);
+  const tasks = Store.getTasks()
+    .filter(t => !t.completed && t.dueDate && t.dueDate > today && t.dueDate <= next7Days)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  const box = App.qs('#upcomingTasks');
+
+  if (!tasks.length) {
+    box.innerHTML = emptyState('No upcoming tasks due in the next 7 days.');
+    return;
+  }
+
+  box.innerHTML = tasks.slice(0, 5).map(t => {
+    const subject = Store.getSubject(t.subjectId);
+    return `
+      <label class="list-item">
+        <input type="checkbox" class="check" data-toggle="${t.id}" aria-label="Mark task complete" />
+        <div class="list-item__main">
+          <div class="list-item__title">${App.escapeHtml(t.title)}</div>
+          <div class="list-item__meta">
+            ${subject ? `<span><span class="dot" style="background:${subject.color};display:inline-block;margin-right:4px"></span>${App.escapeHtml(subject.name)}</span>` : ''}
+            <span>Due ${Dates.formatShort(t.dueDate)} (${Dates.relative(t.dueDate)})</span>
             <span class="priority-${t.priority}">● ${t.priority}</span>
           </div>
         </div>
       </label>`;
   }).join('');
 
-  // Wire inline toggles — flipping one refreshes the stats + ring instantly.
   App.qsa('[data-toggle]', box).forEach(cb => {
     cb.addEventListener('change', () => {
-      Store.toggleTask(cb.dataset.toggle);
-      renderStats();
-      renderProgressRing();
-      renderTodayTasks();
+      const isDone = Store.toggleTask(cb.dataset.toggle);
+      if (isDone) App.playChime('finish');
+      renderAllDashboardData();
     });
   });
 }
 
-/* ---- Upcoming exams with day countdown ----------------------------------- */
+/* ---- Upcoming exams with countdown --------------------------------------- */
 function renderUpcomingExams() {
   const today = Dates.todayISO();
   const exams = Store.getSubjects()
     .filter(s => s.examDate && s.examDate >= today)
     .sort((a, b) => a.examDate.localeCompare(b.examDate));
+
   const box = App.qs('#upcomingExams');
 
   if (!exams.length) {
@@ -124,26 +181,210 @@ function renderUpcomingExams() {
 
   box.innerHTML = exams.map(s => {
     const days = Dates.daysFromToday(s.examDate);
+    const label = days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `in ${days} days`;
     return `
       <div class="list-item">
-        <span class="countdown"><b>${days}</b><small>${days === 1 ? 'day' : 'days'}</small></span>
+        <span class="countdown" style="border-left: 3px solid ${s.color}">
+          <b>${days}</b><small>${days === 1 ? 'day' : 'days'}</small>
+        </span>
         <div class="list-item__main">
           <div class="list-item__title">${App.escapeHtml(s.name)}</div>
-          <div class="list-item__meta"><span>${Dates.formatFull(s.examDate)}</span></div>
+          <div class="list-item__meta">
+            <span>${Dates.formatFull(s.examDate)} (${label})</span>
+            ${s.teacher ? `<span>· ${App.escapeHtml(s.teacher)}</span>` : ''}
+          </div>
         </div>
         <span class="dot" style="background:${s.color};width:14px;height:14px"></span>
       </div>`;
   }).join('');
 }
 
-/* ---- Motivational quote of the day --------------------------------------- */
+/* ---- Subject progress mini overview -------------------------------------- */
+function renderSubjectProgress() {
+  const subjects = Store.getSubjectProgress().filter(s => s.totalTasks > 0);
+  const box = App.qs('#dashSubjectProgress');
+
+  if (!subjects.length) {
+    box.innerHTML = emptyState('Add tasks with subjects to see your subject progress.');
+    return;
+  }
+
+  box.innerHTML = subjects.slice(0, 4).map(s => `
+    <div class="progress-row">
+      <div class="progress-row__top">
+        <span><span class="dot" style="background:${s.color};display:inline-block;margin-right:6px"></span>${App.escapeHtml(s.name)}</span>
+        <b>${s.doneTasks}/${s.totalTasks} · ${s.percent}%</b>
+      </div>
+      <div class="bar"><div class="bar__fill" data-pct="${s.percent}" style="width:0"></div></div>
+    </div>`).join('');
+
+  requestAnimationFrame(() => {
+    App.qsa('#dashSubjectProgress .bar__fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  });
+}
+
+/* ---- Recent Activity Feed ----------------------------------------------- */
+function renderActivity() {
+  const box = App.qs('#dashActivityList');
+  const activities = Store.getActivity(4);
+
+  if (!activities.length) {
+    box.innerHTML = emptyState('No recent activity recorded yet.');
+    return;
+  }
+
+  const icons = {
+    task_complete: '✅',
+    task_create: '📋',
+    task_delete: '🗑️',
+    session_finish: '⏱️',
+    note_create: '📝',
+    subject_create: '📚'
+  };
+
+  box.innerHTML = activities.map(a => `
+    <div class="activity-item">
+      <div class="activity-icon">${icons[a.type] || '📌'}</div>
+      <div class="activity-content">
+        <div class="activity-title">${App.escapeHtml(a.title)}</div>
+        <div class="activity-time">${Dates.timeAgo(a.timestamp)}</div>
+      </div>
+    </div>`).join('');
+}
+
+/* ---- Motivational quote -------------------------------------------------- */
 function renderQuote() {
   const q = App.quoteOfTheDay();
   App.qs('#quoteText').textContent = q.text;
   App.qs('#quoteAuthor').textContent = `— ${q.author}`;
 }
 
-/* ---- Small inline empty-state helper ------------------------------------- */
+/* ---- Empty state helper -------------------------------------------------- */
 function emptyState(msg) {
-  return `<p class="text-muted text-center" style="padding:var(--space-5) 0">${App.escapeHtml(msg)}</p>`;
+  return `<p class="text-muted text-center" style="padding:var(--space-4) 0;font-size:var(--fs-sm)">${App.escapeHtml(msg)}</p>`;
 }
+
+/* ==========================================================================
+   Quick Add Task & Quick Add Subject Modals
+   ========================================================================== */
+function bindDashboardModals() {
+  // Populate subject dropdown in task modal
+  const subDropdown = App.qs('#dashTaskSubject');
+  const subjects = Store.getSubjects();
+  subDropdown.innerHTML = '<option value="">— No subject —</option>' +
+    subjects.map(s => `<option value="${s.id}">${App.escapeHtml(s.name)}</option>`).join('');
+
+  // Quick Add Task button
+  const addTaskBtn = App.qs('#dashAddTaskBtn');
+  if (addTaskBtn) {
+    addTaskBtn.addEventListener('click', () => {
+      App.qs('#dashTaskForm').reset();
+      App.qs('#dashTaskDue').value = Dates.todayISO();
+      App.qsa('.field', App.qs('#dashTaskModal')).forEach(f => f.classList.remove('invalid'));
+      App.openModal('#dashTaskModal');
+    });
+  }
+
+  // Quick Add Subject button
+  const addSubjBtn = App.qs('#dashAddSubjBtn');
+  if (addSubjBtn) {
+    addSubjBtn.addEventListener('click', () => {
+      App.qs('#dashSubjectForm').reset();
+      App.qs('#dfs-name').classList.remove('invalid');
+      selectedColor = COLORS[0];
+      highlightDashSwatch();
+      App.openModal('#dashSubjectModal');
+    });
+  }
+
+  // Swatches for subject modal
+  const swatchesWrap = App.qs('#dashColorSwatches');
+  if (swatchesWrap) {
+    swatchesWrap.innerHTML = COLORS.map(c =>
+      `<button type="button" class="swatch" data-color="${c}" style="background:${c}" aria-label="Color ${c}"></button>`
+    ).join('');
+
+    swatchesWrap.addEventListener('click', e => {
+      const sw = e.target.closest('.swatch');
+      if (sw) {
+        selectedColor = sw.dataset.color;
+        highlightDashSwatch();
+      }
+    });
+  }
+
+  App.bindModalClose('#dashTaskModal');
+  App.bindModalClose('#dashSubjectModal');
+
+  // Submit Quick Add Task
+  App.qs('#dashTaskForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const title = App.qs('#dashTaskTitle').value.trim();
+    const due = App.qs('#dashTaskDue').value;
+
+    let valid = true;
+    if (title.length < 2) { App.qs('#df-title').classList.add('invalid'); valid = false; }
+    if (!due) { App.qs('#df-due').classList.add('invalid'); valid = false; }
+    if (!valid) { App.toast('Please fill in the required fields', 'error'); return; }
+
+    Store.saveTask({
+      title,
+      subjectId: App.qs('#dashTaskSubject').value,
+      category: App.qs('#dashTaskCategory').value,
+      dueDate: due,
+      priority: App.qs('#dashTaskPriority').value,
+      estimate: Number(App.qs('#dashTaskEstimate').value) || 0,
+      notes: App.qs('#dashTaskNotes').value.trim()
+    });
+
+    App.closeModal('#dashTaskModal');
+    App.toast('Task added successfully!', 'success');
+    renderAllDashboardData();
+  });
+
+  // Submit Quick Add Subject
+  App.qs('#dashSubjectForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const name = App.qs('#dashSubjectName').value.trim();
+
+    if (!name) {
+      App.qs('#dfs-name').classList.add('invalid');
+      App.toast('Please enter a subject name', 'error');
+      return;
+    }
+
+    Store.saveSubject({
+      name,
+      color: selectedColor,
+      teacher: App.qs('#dashSubjectTeacher').value.trim(),
+      examDate: App.qs('#dashSubjectExam').value
+    });
+
+    App.closeModal('#dashSubjectModal');
+    App.toast('Subject added successfully!', 'success');
+
+    // Update dropdown for tasks
+    const subs = Store.getSubjects();
+    App.qs('#dashTaskSubject').innerHTML = '<option value="">— No subject —</option>' +
+      subs.map(s => `<option value="${s.id}">${App.escapeHtml(s.name)}</option>`).join('');
+
+    renderAllDashboardData();
+  });
+
+  // Clear errors on input
+  ['dashTaskTitle', 'dashTaskDue'].forEach(id => {
+    const el = App.qs('#' + id);
+    if (el) el.addEventListener('input', e => e.target.closest('.field').classList.remove('invalid'));
+  });
+  const sName = App.qs('#dashSubjectName');
+  if (sName) sName.addEventListener('input', e => e.target.closest('.field').classList.remove('invalid'));
+}
+
+function highlightDashSwatch() {
+  App.qsa('#dashColorSwatches .swatch').forEach(sw => {
+    sw.classList.toggle('selected', sw.dataset.color === selectedColor);
+  });
+}
+
