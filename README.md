@@ -1,8 +1,30 @@
 # 📚 StudyFlow
 
-> **A modern productivity dashboard for students built with HTML, CSS, and JavaScript.**
+<p align="center">
 
-StudyFlow is a responsive web application that helps students organize their academic life in one place. It allows users to manage study tasks, organize subjects, take notes, track progress, and stay productive through a clean and intuitive interface.
+A modern, responsive, distraction-free study planner built with **HTML, CSS and JavaScript**.
+
+Organize subjects, manage tasks, track progress, write notes, and stay productive—all in one place.
+
+</p>
+
+<p align="center">
+
+<a href="https://mohammedomarworks.github.io/StudyFlow/">
+<img src="https://img.shields.io/badge/Live_Demo-Visit_Project-8A2BE2?style=for-the-badge">
+</a>
+
+<a href="LICENSE">
+<img src="https://img.shields.io/badge/License-MIT-success?style=for-the-badge">
+</a>
+
+<img src="https://img.shields.io/badge/HTML-5-orange?style=for-the-badge&logo=html5">
+
+<img src="https://img.shields.io/badge/CSS-3-blue?style=for-the-badge&logo=css3">
+
+<img src="https://img.shields.io/badge/JavaScript-ES6-yellow?style=for-the-badge&logo=javascript">
+
+</p>
 
 ---
 
