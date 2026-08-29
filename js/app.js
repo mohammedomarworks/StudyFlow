@@ -265,7 +265,7 @@ const App = {
       html += `<div class="search-group-title">Subjects (${subjects.length})</div>`;
       subjects.slice(0, 4).forEach(s => {
         html += `
-          <a href="${this.path('subjects.html')}" class="search-result-item">
+          <a href="${this.path('subjects.html')}?focus=${encodeURIComponent(s.id)}" class="search-result-item">
             <span class="search-item__icon" style="background:${s.color};color:#fff;border-radius:6px;width:24px;height:24px;display:grid;place-items:center;font-size:12px;font-weight:700">
               ${this.escapeHtml(s.name.charAt(0).toUpperCase())}
             </span>
@@ -282,7 +282,7 @@ const App = {
       notes.slice(0, 4).forEach(n => {
         const subj = Store.getSubject(n.subjectId);
         html += `
-          <a href="${this.path('notes.html')}" class="search-result-item">
+          <a href="${this.path('notes.html')}?search=${encodeURIComponent(n.title)}" class="search-result-item">
             <span class="search-item__icon">📝</span>
             <div class="search-item__info">
               <div class="search-item__title">${this.escapeHtml(n.title)}</div>
@@ -379,19 +379,65 @@ const App = {
   openModal(overlay) {
     if (typeof overlay === 'string') overlay = this.qs(overlay);
     if (!overlay) return;
+    // A detail view can re-render while its modal remains open (for example,
+    // toggling a task in Calendar). Do not add another focus trap each time.
+    if (overlay.classList.contains('open')) return;
+
+    const dialog = overlay.querySelector('.modal');
+    if (dialog) {
+      dialog.setAttribute('role', dialog.getAttribute('role') || 'dialog');
+      dialog.setAttribute('aria-modal', 'true');
+      if (!dialog.hasAttribute('aria-label') && !dialog.hasAttribute('aria-labelledby')) {
+        const heading = dialog.querySelector('h1, h2, h3');
+        if (heading) {
+          if (!heading.id) heading.id = `modal-title-${Date.now()}`;
+          dialog.setAttribute('aria-labelledby', heading.id);
+        }
+      }
+    }
+
+    overlay._prevFocus = document.activeElement;
     overlay.classList.add('open');
     document.body.style.overflow = 'hidden';
 
-    // Focus the first field for keyboard users
-    const first = overlay.querySelector('input:not([type=hidden]), textarea, select, button:not([data-close])');
+    // Focus the first meaningful field/control for keyboard users.
+    const first = overlay.querySelector(
+      'input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), button:not([data-close]):not([disabled]), a[href]'
+    );
     if (first) setTimeout(() => first.focus(), 50);
+
+    // Trap Tab focus inside the modal (keyboard users can't tab out).
+    overlay._trap = (e) => {
+      if (e.key !== 'Tab') return;
+      const focusables = this.qsa(
+        'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        overlay
+      ).filter(el => el.offsetParent !== null);
+      if (!focusables.length) return;
+      const firstEl = focusables[0];
+      const lastEl = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === firstEl) { e.preventDefault(); lastEl.focus(); }
+      else if (!e.shiftKey && document.activeElement === lastEl) { e.preventDefault(); firstEl.focus(); }
+    };
+    overlay.addEventListener('keydown', overlay._trap);
   },
 
   closeModal(overlay) {
     if (typeof overlay === 'string') overlay = this.qs(overlay);
     if (!overlay) return;
     overlay.classList.remove('open');
-    document.body.style.overflow = '';
+
+    if (overlay._trap) { overlay.removeEventListener('keydown', overlay._trap); overlay._trap = null; }
+
+    // Only release the scroll lock once no modal remains open.
+    if (!this.qs('.modal-overlay.open')) document.body.style.overflow = '';
+
+    // Return focus to whatever was focused before the modal opened.
+    const prev = overlay._prevFocus;
+    if (prev && typeof prev.focus === 'function' && document.contains(prev)) prev.focus();
+    overlay._prevFocus = null;
+
+    if (overlay._removeOnClose) setTimeout(() => overlay.remove(), 250);
   },
 
   /** Wire an overlay to close on backdrop click and on any [data-close] */
@@ -427,7 +473,8 @@ const App = {
     document.body.appendChild(overlay);
     this.openModal(overlay);
 
-    const close = () => { this.closeModal(overlay); setTimeout(() => overlay.remove(), 250); };
+    overlay._removeOnClose = true;
+    const close = () => this.closeModal(overlay);
     overlay.addEventListener('click', e => {
       if (e.target === overlay || e.target.closest('[data-close]')) close();
       if (e.target.closest('[data-confirm]')) { close(); onConfirm && onConfirm(); }
@@ -473,4 +520,3 @@ const App = {
 };
 
 document.addEventListener('DOMContentLoaded', () => App.init());
-

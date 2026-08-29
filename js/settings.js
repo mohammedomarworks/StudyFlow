@@ -24,30 +24,26 @@ function initThemeGroup() {
   App.qsa('input[name="themeChoice"]').forEach(r => {
     r.addEventListener('change', e => {
       const val = e.target.value;
-      Store.saveSettings({ theme: val });
-
-      if (val === 'system') {
-        const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
-      } else {
-        document.documentElement.setAttribute('data-theme', val);
-      }
-
-      App.toast(`Theme updated to ${val}`, 'success');
+      App.setTheme(val); // handles persistence, system-detection, and transition
+      App.toast(`Theme set to ${val}`, 'success');
     });
   });
 }
 
 /* ==========================================================================
-   Pomodoro Durations
+   Pomodoro Durations & Behavior
    ========================================================================== */
 function initPomodoroForm() {
-  const settings = Store.getSettings();
-  const pomo = settings.pomodoro || { focus: 25, shortBreak: 5, longBreak: 15 };
+  const pomo = Store.getSettings().pomodoro;
 
-  App.qs('#pomoFocus').value = pomo.focus || 25;
-  App.qs('#pomoShort').value = pomo.shortBreak || 5;
-  App.qs('#pomoLong').value = pomo.longBreak || 15;
+  App.qs('#pomoFocus').value = pomo.focus;
+  App.qs('#pomoShort').value = pomo.shortBreak;
+  App.qs('#pomoLong').value = pomo.longBreak;
+
+  const soundToggle = App.qs('#pomoSound');
+  const autoBreakToggle = App.qs('#pomoAutoBreak');
+  if (soundToggle) soundToggle.checked = pomo.sound !== false;
+  if (autoBreakToggle) autoBreakToggle.checked = pomo.autoBreak === true;
 
   App.qs('#pomoSettingsForm').addEventListener('submit', e => {
     e.preventDefault();
@@ -56,11 +52,21 @@ function initPomodoroForm() {
     const shortBreak = Math.max(1, Math.min(30, parseInt(App.qs('#pomoShort').value, 10) || 5));
     const longBreak = Math.max(1, Math.min(60, parseInt(App.qs('#pomoLong').value, 10) || 15));
 
+    // saveSettings merges the pomodoro object, so unspecified keys are kept.
     Store.saveSettings({
-      pomodoro: { focus, shortBreak, longBreak }
+      pomodoro: {
+        focus, shortBreak, longBreak,
+        sound: soundToggle ? soundToggle.checked : pomo.sound,
+        autoBreak: autoBreakToggle ? autoBreakToggle.checked : pomo.autoBreak
+      }
     });
 
-    App.toast('Pomodoro timer settings saved!', 'success');
+    // Reflect the clamped values back into the inputs.
+    App.qs('#pomoFocus').value = focus;
+    App.qs('#pomoShort').value = shortBreak;
+    App.qs('#pomoLong').value = longBreak;
+
+    App.toast('Timer settings saved!', 'success');
   });
 }
 
@@ -125,8 +131,7 @@ function bindDangerControls() {
       message: 'This will reset your data and seed fresh starter subjects, tasks, and notes.',
       confirmText: 'Reload Demo',
       onConfirm: () => {
-        localStorage.clear();
-        Store.seed();
+        Store.reseed();
         App.toast('Starter demo data loaded!', 'success');
         setTimeout(() => { window.location.reload(); }, 600);
       }

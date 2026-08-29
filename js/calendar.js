@@ -79,8 +79,11 @@ function render() {
     let shown = chips.slice(0, 3).join('');
     if (chips.length > 3) shown += `<div class="cal-event more">+${chips.length - 3} more</div>`;
 
+    const count = tasks.length + exams.length;
+    const label = `${Dates.formatFull(iso)}${count ? `, ${count} item${count === 1 ? '' : 's'}` : ', nothing scheduled'}`;
+
     cells += `
-      <div class="cal-cell ${isToday ? 'today' : ''}" data-date="${iso}" style="cursor:pointer" title="Click to view details for ${Dates.formatShort(iso)}">
+      <div class="cal-cell ${isToday ? 'today' : ''}" data-date="${iso}" role="button" tabindex="0" aria-label="${label}" title="View details for ${Dates.formatShort(iso)}">
         <span class="cal-cell__num">${day}</span>
         ${shown}
       </div>`;
@@ -88,9 +91,15 @@ function render() {
 
   grid.innerHTML = cells;
 
-  // Click any cell to open day detail modal
+  // Click or keyboard (Enter/Space) opens the day detail modal.
   App.qsa('.cal-cell[data-date]', grid).forEach(cell => {
     cell.addEventListener('click', () => openDay(cell.dataset.date));
+    cell.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openDay(cell.dataset.date);
+      }
+    });
   });
 }
 

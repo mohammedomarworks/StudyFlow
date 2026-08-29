@@ -103,6 +103,9 @@
             </div>
           </div>
 
+          <!-- Shows what this session is linked to (populated by timer.js) -->
+          <div id="timerContext" class="timer-context" hidden></div>
+
           <!-- Circular SVG Countdown Display -->
           <div class="timer-circle-wrap mt-6">
             <div class="timer-circle" id="timerCircle">
@@ -130,11 +133,11 @@
               <svg id="timerPlayIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               <span id="timerToggleText">Start Focus</span>
             </button>
-            <button class="btn btn-ghost" id="timerResetBtn" title="Reset timer">
+            <button class="btn btn-ghost" id="timerResetBtn" title="Reset timer" aria-label="Reset timer">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
               Reset
             </button>
-            <button class="btn btn-ghost" id="timerSkipBtn" title="Skip to next session">
+            <button class="btn btn-ghost" id="timerSkipBtn" title="Skip to next session" aria-label="Skip to next session">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
               Skip
             </button>

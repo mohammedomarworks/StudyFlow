@@ -3,6 +3,13 @@
    Features: Pomodoro (25m), Short Break (5m), Long Break (15m),
    Subject & Task linking, SVG circular countdown, document title sync,
    Web Audio alerts on completion, background-safe interval, session logging.
+
+   Refresh behavior (intentional): the running timer lives only in memory. If
+   the page is refreshed or closed mid-session, the timer resets to a fresh
+   "ready" state and NO partial session is logged. This keeps the study log
+   honest (only sessions the user actually sat through are recorded) and avoids
+   ambiguous resume edge-cases. The countdown itself is timestamp-based
+   (endTime), so it stays accurate even when the tab is backgrounded/throttled.
    ========================================================================== */
 
 const TIMER_RADIUS = 114;
@@ -14,7 +21,8 @@ const state = {
   totalSeconds: 25 * 60,
   remainingSeconds: 25 * 60,
   endTime: null,
-  intervalId: null
+  intervalId: null,
+  isCompleting: false         // guard so a session is never logged twice
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -22,10 +30,18 @@ document.addEventListener('DOMContentLoaded', () => {
   populateDropdowns();
   bindTimerControls();
   setMode('pomodoro');
+  renderFocusContext();
   renderTodaySessions();
+  maybeAutostart();
 });
 
-/* Read URL params (e.g. from task card "Focus" button) */
+/* Keep the timestamp-based countdown correct when returning to a backgrounded
+   tab (setInterval is throttled while hidden). */
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && state.isRunning) tick();
+});
+
+/* Read URL params (e.g. from task card "Start Focus" button) */
 function readUrlParams() {
   const params = new URLSearchParams(window.location.search);
   const subjectId = params.get('subjectId');
@@ -33,6 +49,9 @@ function readUrlParams() {
 
   if (subjectId) state.prefillSubjectId = subjectId;
   if (taskId) state.prefillTaskId = taskId;
+  // Only the task "Start Focus" action opts into auto-start; browsing to the
+  // timer with a subject prefilled (e.g. from a Subject card) does not.
+  if (params.get('autostart') === '1') state.autostart = true;
 }
 
 /* ==========================================================================
@@ -54,7 +73,9 @@ function populateDropdowns() {
 
   subEl.addEventListener('change', () => {
     updateTaskDropdown();
+    renderFocusContext();
   });
+  taskEl.addEventListener('change', renderFocusContext);
 }
 
 function updateTaskDropdown() {
@@ -74,18 +95,49 @@ function updateTaskDropdown() {
   }
 }
 
+/* Show a small banner describing what the current session is linked to, and
+   auto-start the countdown when arriving from a task's "Start Focus" action. */
+function renderFocusContext() {
+  const box = App.qs('#timerContext');
+  if (!box) return;
+
+  const subject = Store.getSubject(App.qs('#timerSubject').value);
+  const task = Store.getTask(App.qs('#timerTask').value);
+
+  if (!subject && !task) {
+    box.hidden = true;
+    box.innerHTML = '';
+    return;
+  }
+
+  const dot = subject ? `<span class="dot" style="background:${subject.color}"></span>` : '';
+  const parts = [];
+  if (task) parts.push(`<b>${App.escapeHtml(task.title)}</b>`);
+  if (subject) parts.push(App.escapeHtml(subject.name));
+
+  box.hidden = false;
+  box.innerHTML = `<span class="timer-context__icon">🎯</span> ${dot}<span>Focusing on ${parts.join(' · ')}</span>`;
+}
+
+/* If launched from a task "Start Focus" button, begin the session right away. */
+function maybeAutostart() {
+  if (state.autostart && state.mode === 'pomodoro' && !state.isRunning) {
+    startTimer();
+    const task = Store.getTask(App.qs('#timerTask').value);
+    if (task) App.toast(`Focus session started for "${task.title}"`, 'info');
+  }
+}
+
 /* ==========================================================================
    Timer Durations & Mode Switching
    ========================================================================== */
 function getDurationForMode(mode) {
-  const settings = Store.getSettings();
-  const pomo = settings.pomodoro || { focus: 25, shortBreak: 5, longBreak: 15 };
-
+  const pomo = Store.getSettings().pomodoro;
   switch (mode) {
-    case 'shortBreak': return (pomo.shortBreak || 5) * 60;
-    case 'longBreak':  return (pomo.longBreak || 15) * 60;
+    case 'shortBreak': return pomo.shortBreak * 60;
+    case 'longBreak':  return pomo.longBreak * 60;
     case 'pomodoro':
-    default:           return (pomo.focus || 25) * 60;
+    default:           return pomo.focus * 60;
   }
 }
 
@@ -147,22 +199,23 @@ function startTimer() {
   if (state.isRunning) return;
 
   state.isRunning = true;
+  state.isCompleting = false;
   state.endTime = Date.now() + state.remainingSeconds * 1000;
 
   App.qs('#timerToggleBtn').classList.add('btn-running');
   App.qs('#timerToggleText').textContent = 'Pause';
   App.qs('#timerPlayIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
 
-  state.intervalId = setInterval(() => {
-    const now = Date.now();
-    const remaining = Math.max(0, Math.ceil((state.endTime - now) / 1000));
-    state.remainingSeconds = remaining;
-    updateDisplay();
+  state.intervalId = setInterval(tick, 250);
+}
 
-    if (remaining <= 0) {
-      completeTimer();
-    }
-  }, 250);
+/* One countdown step — derives remaining time from endTime (drift/throttle
+   safe) rather than counting interval fires. */
+function tick() {
+  const remaining = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
+  state.remainingSeconds = remaining;
+  updateDisplay();
+  if (remaining <= 0) completeTimer();
 }
 
 function pauseTimer() {
@@ -186,6 +239,11 @@ function resetTimer() {
 }
 
 function completeTimer() {
+  // Guard: the interval is cleared in pauseTimer(), but this protects against
+  // any path that could invoke completion twice for the same session.
+  if (state.isCompleting) return;
+  state.isCompleting = true;
+
   pauseTimer();
   App.playChime('finish');
 
@@ -196,15 +254,24 @@ function completeTimer() {
     const taskId = App.qs('#timerTask').value;
 
     Store.saveSession({
-      mode: 'pomodoro',
+      type: 'focus',
       durationMinutes: durationMin,
       subjectId,
       taskId
     });
 
-    App.toast(`Focus session complete (+${durationMin}m)! Great job! 🎉`, 'success');
+    const task = Store.getTask(taskId);
+    App.toast(
+      task
+        ? `Focus session on "${task.title}" complete (+${durationMin}m)! 🎉`
+        : `Focus session complete (+${durationMin}m)! Great job! 🎉`,
+      'success'
+    );
     renderTodaySessions();
+
     setMode('shortBreak');
+    // Auto-start the break if the user enabled it in Settings.
+    if (Store.getSettings().pomodoro.autoBreak) startTimer();
   } else {
     App.toast('Break completed! Ready for the next focus session?', 'info');
     setMode('pomodoro');
@@ -252,7 +319,10 @@ function bindTimerControls() {
 function renderTodaySessions() {
   const today = Dates.todayISO();
   const sessions = Store.getSessions()
-    .filter(s => (s.completedAt || '').startsWith(today))
+    // Convert UTC timestamps to the user's local study day. Keep this local
+    // to the timer UI so it remains compatible with an older cached data
+    // layer during a normal static-site update.
+    .filter(s => Dates.toISO(new Date(s.completedAt)) === today)
     .reverse();
 
   const totalMin = sessions.reduce((acc, s) => acc + (Number(s.durationMinutes) || 0), 0);

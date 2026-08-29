@@ -31,11 +31,16 @@ const Dates = {
 
   /** Parse 'YYYY-MM-DD' into a Date at LOCAL midnight (avoids UTC shift). */
   parse(iso) {
-    if (!iso) return null;
+    if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null;
     const parts = iso.split('-').map(Number);
-    if (parts.length < 3 || parts.some(isNaN)) return null;
+    if (parts.some(Number.isNaN)) return null;
     const [y, m, d] = parts;
-    return new Date(y, m - 1, d);
+    const date = new Date(y, m - 1, d);
+    // Date accepts overflow values such as 2026-02-30. Reject those rather
+    // than silently moving tasks and exams into another month.
+    return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d
+      ? date
+      : null;
   },
 
   /** Whole days from today to the given date (negative = in the past). */
@@ -107,6 +112,13 @@ const Dates = {
     if (days === 1) return 'Yesterday';
     if (days < 7) return `${days}d ago`;
     return this.formatShort(isoString.slice(0, 10));
+  },
+
+  /** Local calendar date for an ISO datetime (session timestamps are UTC). */
+  localDateFromDateTime(isoString) {
+    if (typeof isoString !== 'string') return '';
+    const date = new Date(isoString);
+    return isNaN(date.getTime()) ? '' : this.toISO(date);
   }
 };
 
@@ -156,14 +168,29 @@ const Store = {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   },
 
+  /** Always return a plain array (guards against corrupt / non-array values). */
+  _arr(key) {
+    const v = this._read(key, []);
+    return Array.isArray(v) ? v : [];
+  },
+
+  /** Validate a subject color; fall back to the brand purple when invalid.
+      Colors are interpolated into inline `style` attributes, so this also
+      prevents CSS/attribute injection from imported or malformed data. */
+  _safeColor(color) {
+    return (typeof color === 'string' && /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color.trim()))
+      ? color.trim()
+      : '#7c3aed';
+  },
+
   /* ========================= ACTIVITY LOG ============================== */
   getActivity(limit = 20) {
-    const list = this._read(this.KEYS.activity, []);
+    const list = this._arr(this.KEYS.activity);
     return list.slice(0, limit);
   },
 
   logActivity(type, title, meta = {}) {
-    const list = this._read(this.KEYS.activity, []);
+    const list = this._arr(this.KEYS.activity);
     const entry = {
       id: this.uid(),
       type, // 'task_complete', 'task_create', 'session_finish', 'note_create', 'subject_create'
@@ -179,7 +206,19 @@ const Store = {
 
   /* ========================= SUBJECTS =================================== */
   getSubjects() {
-    return this._read(this.KEYS.subjects, []);
+    // Normalize missing/invalid fields so a corrupt or imported record can
+    // never crash a render (e.g. s.name.trim()) or inject a bad color.
+    return this._arr(this.KEYS.subjects)
+      .filter(s => s && typeof s === 'object')
+      .map(s => ({
+        ...s,
+        id: s.id || this.uid(),
+        name: (typeof s.name === 'string' && s.name.trim()) ? s.name : 'Untitled subject',
+        color: this._safeColor(s.color),
+        teacher: typeof s.teacher === 'string' ? s.teacher : '',
+        examDate: Dates.parse(s.examDate) ? s.examDate : '',
+        createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString()
+      }));
   },
 
   getSubject(id) {
@@ -226,20 +265,20 @@ const Store = {
 
   /* =========================== TASKS ==================================== */
   getTasks() {
-    const list = this._read(this.KEYS.tasks, []);
+    const list = this._arr(this.KEYS.tasks).filter(t => t && typeof t === 'object');
     // Normalize missing fields for backward compatibility
     return list.map(t => ({
-      id: t.id,
-      title: t.title || 'Untitled task',
-      subjectId: t.subjectId || '',
-      dueDate: t.dueDate || Dates.todayISO(),
-      priority: t.priority || 'medium',
+      id: t.id || this.uid(),
+      title: (typeof t.title === 'string' && t.title.trim()) ? t.title : 'Untitled task',
+      subjectId: typeof t.subjectId === 'string' ? t.subjectId : '',
+      dueDate: Dates.parse(t.dueDate) ? t.dueDate : Dates.todayISO(),
+      priority: ['high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
       estimate: Number(t.estimate) || 0,
-      category: t.category || 'General',
-      notes: t.notes || '',
-      completed: Boolean(t.completed),
-      completedAt: t.completedAt || (t.completed ? t.createdAt || new Date().toISOString() : null),
-      createdAt: t.createdAt || new Date().toISOString()
+      category: (typeof t.category === 'string' && t.category.trim()) ? t.category : 'General',
+      notes: typeof t.notes === 'string' ? t.notes : '',
+      completed: t.completed === true || t.completed === 'true',
+      completedAt: t.completedAt || ((t.completed === true || t.completed === 'true') ? t.createdAt || new Date().toISOString() : null),
+      createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString()
     }));
   },
 
@@ -293,15 +332,15 @@ const Store = {
 
   /* =========================== NOTES ==================================== */
   getNotes() {
-    const list = this._read(this.KEYS.notes, []);
+    const list = this._arr(this.KEYS.notes).filter(n => n && typeof n === 'object');
     return list.map(n => ({
-      id: n.id,
-      title: n.title || 'Untitled Note',
-      subjectId: n.subjectId || '',
-      content: n.content || '',
-      tags: Array.isArray(n.tags) ? n.tags : [],
-      createdAt: n.createdAt || new Date().toISOString(),
-      updatedAt: n.updatedAt || n.createdAt || new Date().toISOString()
+      id: n.id || this.uid(),
+      title: (typeof n.title === 'string' && n.title.trim()) ? n.title : 'Untitled Note',
+      subjectId: typeof n.subjectId === 'string' ? n.subjectId : '',
+      content: typeof n.content === 'string' ? n.content : '',
+      tags: Array.isArray(n.tags) ? n.tags.filter(tag => typeof tag === 'string') : [],
+      createdAt: typeof n.createdAt === 'string' ? n.createdAt : new Date().toISOString(),
+      updatedAt: typeof n.updatedAt === 'string' ? n.updatedAt : (typeof n.createdAt === 'string' ? n.createdAt : new Date().toISOString())
     }));
   },
 
@@ -339,9 +378,9 @@ const Store = {
 
   /* ======================= STUDY SESSIONS =============================== */
   getSessions() {
-    const list = this._read(this.KEYS.sessions, []);
+    const list = this._arr(this.KEYS.sessions).filter(s => s && typeof s === 'object');
     return list.map(s => ({
-      id: s.id,
+      id: s.id || this.uid(),
       subjectId: s.subjectId || '',
       taskId: s.taskId || '',
       durationMinutes: Number(s.durationMinutes) || 25,
@@ -355,6 +394,11 @@ const Store = {
     const sessions = this.getSessions();
     if (!data.id) {
       data.id = this.uid();
+      // A session logged from the timer is a focus session unless explicitly
+      // marked as a break. Normalizing here means the activity feed and stats
+      // stay correct even if a caller omits `type`.
+      data.type = data.type === 'break' ? 'break' : 'focus';
+      data.durationMinutes = Number(data.durationMinutes) || 0;
       data.completedAt = data.completedAt || new Date().toISOString();
       sessions.unshift(data);
     } else {
@@ -365,10 +409,14 @@ const Store = {
 
     if (data.type === 'focus') {
       const subj = this.getSubject(data.subjectId);
-      const label = subj ? `Focus session on ${subj.name}` : 'Focus study session';
+      const task = this.getTask(data.taskId);
+      let label = 'Focus study session';
+      if (task) label = `Focus session on "${task.title}"`;
+      else if (subj) label = `Focus session on ${subj.name}`;
       this.logActivity('session_finish', `Completed ${data.durationMinutes}m ${label}`, {
         duration: data.durationMinutes,
-        subjectId: data.subjectId
+        subjectId: data.subjectId,
+        taskId: data.taskId || ''
       });
     }
     return data;
@@ -383,11 +431,11 @@ const Store = {
     const today = Dates.todayISO();
 
     const totalMinutes = sessions.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
-    const todaySessions = sessions.filter(s => (s.completedAt || '').startsWith(today));
+    const todaySessions = sessions.filter(s => Dates.localDateFromDateTime(s.completedAt) === today);
     const todayMinutes = todaySessions.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
 
     // Calculate active streak days
-    const uniqueDays = new Set(sessions.map(s => (s.completedAt || '').slice(0, 10)).filter(Boolean));
+    const uniqueDays = new Set(sessions.map(s => Dates.localDateFromDateTime(s.completedAt)).filter(Boolean));
     let streak = 0;
     let checkDate = new Date();
     // Check if today has a session, or if yesterday was the last
@@ -416,7 +464,7 @@ const Store = {
     const defaults = {
       theme: 'system', // 'light' | 'dark' | 'system'
       pomodoro: {
-        focusTime: 25,
+        focus: 25,       // minutes — key matches timer.js & settings.js
         shortBreak: 5,
         longBreak: 15,
         sound: true,
@@ -424,10 +472,27 @@ const Store = {
       }
     };
     const s = this._read(this.KEYS.settings, {});
+    const raw = (s && typeof s === 'object') ? s : {};
+    const pomo = (raw.pomodoro && typeof raw.pomodoro === 'object') ? raw.pomodoro : {};
+    // Migrate the legacy `focusTime` key to `focus` if an old backup is loaded.
+    if (pomo.focus == null && pomo.focusTime != null) pomo.focus = pomo.focusTime;
+    const normalizeDuration = (value, fallback, min, max) => {
+      const n = Number(value);
+      return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
+    };
     return {
       ...defaults,
-      ...s,
-      pomodoro: { ...defaults.pomodoro, ...(s.pomodoro || {}) }
+      ...raw,
+      theme: ['light', 'dark', 'system'].includes(raw.theme) ? raw.theme : defaults.theme,
+      pomodoro: {
+        ...defaults.pomodoro,
+        ...pomo,
+        focus: normalizeDuration(pomo.focus, defaults.pomodoro.focus, 1, 120),
+        shortBreak: normalizeDuration(pomo.shortBreak, defaults.pomodoro.shortBreak, 1, 30),
+        longBreak: normalizeDuration(pomo.longBreak, defaults.pomodoro.longBreak, 1, 60),
+        sound: typeof pomo.sound === 'boolean' ? pomo.sound : defaults.pomodoro.sound,
+        autoBreak: typeof pomo.autoBreak === 'boolean' ? pomo.autoBreak : defaults.pomodoro.autoBreak
+      }
     };
   },
 
@@ -437,10 +502,16 @@ const Store = {
     this._write(this.KEYS.settings, s);
   },
 
-  saveSettings(newSettings) {
-    const s = { ...this.getSettings(), ...newSettings };
-    this._write(this.KEYS.settings, s);
-    return s;
+  /** Merge-save settings. Nested `pomodoro` is merged (not replaced) so saving
+      only durations never drops the sound/autoBreak preferences. */
+  saveSettings(newSettings = {}) {
+    const current = this.getSettings();
+    const merged = { ...current, ...newSettings };
+    if (newSettings.pomodoro) {
+      merged.pomodoro = { ...current.pomodoro, ...newSettings.pomodoro };
+    }
+    this._write(this.KEYS.settings, merged);
+    return merged;
   },
 
   /* ===================== DERIVED STATISTICS ============================= */
@@ -526,12 +597,25 @@ const Store = {
   },
 
   importJSON(jsonString) {
+    let data;
     try {
-      const data = JSON.parse(jsonString);
-      if (!data || typeof data !== 'object') {
-        return { success: false, error: 'Invalid backup file format.' };
-      }
+      data = JSON.parse(jsonString);
+    } catch (e) {
+      return { success: false, error: 'Could not read the file — it is not valid JSON.' };
+    }
 
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return { success: false, error: 'Invalid backup file format.' };
+    }
+
+    // Must look like a StudyFlow backup before we touch existing data.
+    const known = ['subjects', 'tasks', 'notes', 'sessions', 'activity', 'settings'];
+    const hasKnown = known.some(k => k in data);
+    if (!hasKnown) {
+      return { success: false, error: 'This file does not look like a StudyFlow backup.' };
+    }
+
+    try {
       if (Array.isArray(data.subjects)) this._write(this.KEYS.subjects, data.subjects);
       if (Array.isArray(data.tasks)) this._write(this.KEYS.tasks, data.tasks);
       if (Array.isArray(data.notes)) this._write(this.KEYS.notes, data.notes);
@@ -549,7 +633,7 @@ const Store = {
         }
       };
     } catch (e) {
-      return { success: false, error: 'Failed to parse JSON file: ' + e.message };
+      return { success: false, error: 'Failed to import backup: ' + e.message };
     }
   },
 
@@ -557,6 +641,15 @@ const Store = {
   /** Populate friendly example data the first time the app is opened */
   seedIfEmpty() {
     if (localStorage.getItem(this.KEYS.seeded)) return;
+
+    // Do not infer "new user" only from the seed marker: older releases and
+    // hand-restored data may have valid sp_* records without it. Seeding in
+    // that state would replace a user's existing planner.
+    const dataKeys = [this.KEYS.subjects, this.KEYS.tasks, this.KEYS.notes, this.KEYS.sessions, this.KEYS.activity, this.KEYS.settings];
+    if (dataKeys.some(key => localStorage.getItem(key) !== null)) {
+      localStorage.setItem(this.KEYS.seeded, '1');
+      return;
+    }
 
     const subjects = [
       { id: 's1', name: 'Mathematics',        color: '#7c3aed', teacher: 'Dr. Alan Reed',   examDate: Dates.offsetISO(9),  createdAt: new Date().toISOString() },
@@ -599,12 +692,22 @@ const Store = {
     localStorage.setItem(this.KEYS.seeded, '1');
   },
 
-  /** Wipe all app data */
+  /** Force-reload starter demo data (Settings → "Reload Starter Demo Data").
+      Explicitly remove the seed marker so seedIfEmpty() runs fresh. */
+  reseed() {
+    this.clearAll();
+    localStorage.removeItem(this.KEYS.seeded);
+    this.seedIfEmpty();
+  },
+
+  /** Wipe all app data without repopulating starter data after refresh. */
   clearAll() {
     Object.values(this.KEYS).forEach(k => localStorage.removeItem(k));
+    // Keep an explicit empty-state marker. Without it, the app mistakes a
+    // deliberate reset for a first visit and recreates the demo records.
+    localStorage.setItem(this.KEYS.seeded, '1');
   }
 };
 
 // Seed example data on very first load, before any page renders.
 Store.seedIfEmpty();
-

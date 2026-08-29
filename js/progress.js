@@ -203,13 +203,17 @@ function renderActivityTimeline() {
     subject_create: '📚'
   };
 
-  box.innerHTML = activities.map(a => `
+  box.innerHTML = activities.map(a => {
+    const ts = a.timestamp || '';
+    const dateStr = ts ? Dates.formatFull(ts.slice(0, 10)) : '';
+    return `
     <div class="activity-item">
       <div class="activity-icon">${icons[a.type] || '📌'}</div>
       <div class="activity-content">
         <div class="activity-title">${App.escapeHtml(a.title)}</div>
-        <div class="activity-time">${Dates.timeAgo(a.timestamp)} (${Dates.formatFull(a.timestamp.slice(0,10))})</div>
+        <div class="activity-time">${Dates.timeAgo(ts)}${dateStr ? ` (${dateStr})` : ''}</div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 

@@ -114,19 +114,42 @@
         <form id="pomoSettingsForm">
           <div class="form-row">
             <div class="field">
-              <label>Focus Duration (min)</label>
+              <label for="pomoFocus">Focus Duration (min)</label>
               <input type="number" class="input" id="pomoFocus" min="1" max="120" value="25" required />
             </div>
             <div class="field">
-              <label>Short Break (min)</label>
+              <label for="pomoShort">Short Break (min)</label>
               <input type="number" class="input" id="pomoShort" min="1" max="30" value="5" required />
             </div>
             <div class="field">
-              <label>Long Break (min)</label>
+              <label for="pomoLong">Long Break (min)</label>
               <input type="number" class="input" id="pomoLong" min="1" max="60" value="15" required />
             </div>
           </div>
-          <button type="submit" class="btn btn-primary">Save Timer Durations</button>
+
+          <div class="settings-row">
+            <div class="settings-row__info">
+              <div class="settings-row__title">Completion sound</div>
+              <div class="settings-row__desc">Play a gentle chime when a focus session or break ends.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pomoSound" />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+
+          <div class="settings-row" style="margin-bottom:var(--space-4)">
+            <div class="settings-row__info">
+              <div class="settings-row__title">Auto-start breaks</div>
+              <div class="settings-row__desc">Automatically start the break countdown after a focus session completes.</div>
+            </div>
+            <label class="switch">
+              <input type="checkbox" id="pomoAutoBreak" />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary">Save Timer Settings</button>
         </form>
       </div>
 
