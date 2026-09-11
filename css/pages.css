@@ -10,38 +10,7 @@
 .two-col { grid-template-columns: 1.3fr 1fr; align-items: start; }
 @media (max-width: 860px) { .two-col { grid-template-columns: 1fr; } }
 
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--space-4);
-}
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-5);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  transition: transform var(--transition), box-shadow var(--transition);
-}
-.stat-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
-.stat-card__icon {
-  width: 52px; height: 52px;
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  border-radius: 14px;
-  background: var(--primary-soft);
-  color: var(--primary);
-}
-.stat-card__icon svg { width: 26px; height: 26px; }
-.stat-card__icon.green  { background: color-mix(in srgb, var(--success) 15%, transparent); color: var(--success); }
-.stat-card__icon.orange { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
-.stat-card__icon.blue   { background: color-mix(in srgb, var(--info) 15%, transparent);    color: var(--info); }
-.stat-card__value { font-size: var(--fs-2xl); font-weight: 800; color: var(--text); line-height: 1; }
-.stat-card__label { font-size: var(--fs-sm); color: var(--text-muted); margin-top: 4px; }
+
 
 /* Toolbar (search + filters + sort + add) — Flexbox, wraps on small screens */
 .toolbar {
@@ -763,4 +732,9 @@
   margin-top: var(--space-3);
   padding-top: var(--space-3);
   border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+#overallTiles.stats-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }

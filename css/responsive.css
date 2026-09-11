@@ -17,6 +17,8 @@
 @media (max-width: 768px) {
   :root { --navbar-h: 62px; }
 
+  .navbar__inner { padding-inline: var(--space-4); }
+
   /* Collapse the nav links into a slide-down panel */
   .nav-toggle { display: grid; }
   .nav-links {
@@ -50,7 +52,10 @@
   .nav-search-btn kbd { display: none; }
   .nav-search-btn { padding: 8px; border-radius: 12px; }
 
-  .form-row { grid-template-columns: 1fr; }
+  .form-row,
+  .form-row-3 { grid-template-columns: 1fr; }
+
+  .theme-options-grid { grid-template-columns: 1fr; gap: var(--space-3); }
 
   .hero h1 { font-size: var(--fs-2xl); }
   h1 { font-size: var(--fs-2xl); }
@@ -59,26 +64,55 @@
   .toolbar .select { flex: 1; min-width: 130px; }
 
   .timer-session-pickers { grid-template-columns: 1fr; }
+  #overallTiles.stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
 @media (max-width: 560px) {
-  .container { padding-inline: var(--space-4); }
-  .stats-grid { grid-template-columns: 1fr; }
+  .container { padding-inline: var(--space-3); }
+  .navbar__inner { padding-inline: var(--space-3); }
+  .brand { gap: var(--space-2); font-size: var(--fs-base); }
+  .brand__mark { width: 34px; height: 34px; border-radius: 10px; }
+  .brand__mark svg { width: 18px; height: 18px; }
+  .theme-toggle,
+  .nav-toggle,
+  .nav-search-btn { width: 36px; height: 36px; min-width: 36px; padding: 0; display: grid; place-items: center; }
 
-  .cal-cell { min-height: 72px; padding: 4px; }
-  .cal-cell__num { font-size: var(--fs-xs); }
-  .cal-event { font-size: 0.6rem; padding: 1px 4px; }
+  .stats-grid { grid-template-columns: 1fr; gap: var(--space-3); }
+  #overallTiles.stats-grid { grid-template-columns: 1fr; }
+  #focusAnalytics .stats-grid { grid-template-columns: 1fr !important; }
 
-  .task-item { flex-wrap: wrap; }
+  .cal-weekdays { gap: 3px; }
+  .cal-grid { gap: 3px; }
+  .cal-cell { min-height: 58px; padding: 3px; border-radius: 6px; }
+  .cal-cell__num { font-size: 0.75rem; }
+  .cal-event { font-size: 0.6rem; padding: 1px 3px; border-radius: 4px; }
+
+  .task-item { flex-wrap: wrap; padding: var(--space-3); }
   .task-item__actions { width: 100%; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: var(--space-2); margin-top: var(--space-2); }
 
-  .modal__foot { flex-direction: column-reverse; }
+  .modal-overlay { padding: var(--space-2); }
+  .modal { max-height: 94vh; }
+  .modal__head { padding: var(--space-4) var(--space-4) var(--space-3); }
+  .modal__body { padding: var(--space-4); }
+  .modal__foot { flex-direction: column-reverse; padding: var(--space-3) var(--space-4); }
   .modal__foot .btn { width: 100%; }
 
-  .toast-wrap { left: var(--space-4); right: var(--space-4); bottom: var(--space-4); }
+  .toast-wrap { left: var(--space-3); right: var(--space-3); bottom: var(--space-3); }
   .toast { min-width: 0; width: 100%; }
 
-  .quick-actions-bar { grid-template-columns: 1fr 1fr; }
+  .quick-actions-bar { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
   .timer-stats-row { grid-template-columns: 1fr; }
+  .timer-circle-wrap svg { max-width: min(250px, 72vw); height: auto; }
+  .timer-controls { flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
+  .timer-controls .btn { flex: 1; min-width: 90px; }
+}
+
+/* ---- <= 375px : small phones -------------------------------------------- */
+@media (max-width: 375px) {
+  .brand span { font-size: var(--fs-sm); }
+  .quick-action-btn { padding: var(--space-2); font-size: var(--fs-xs); gap: 4px; }
+  .quick-action-btn svg { width: 15px; height: 15px; }
+  .toolbar .select { width: 100%; min-width: 100%; }
+  .timer-circle-wrap svg { max-width: min(210px, 68vw); }
 }

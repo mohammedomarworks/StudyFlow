@@ -38,14 +38,14 @@ function renderHero() {
 function renderStats() {
   const s = Store.getStats();
   const cards = [
-    { label: 'Total Tasks',    value: s.total,     cls: '',                                          icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
-    { label: 'Completed',      value: s.completed, cls: 'green',                                     icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
-    { label: 'Active',         value: s.pending,   cls: 'orange',                                    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
-    { label: 'Overdue',        value: s.overdue,   cls: s.overdue > 0 ? 'orange' : '', isOverdue: s.overdue > 0, icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' }
+    { label: 'Total Tasks',    value: s.total,     cls: '',                                          filter: 'all',       icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
+    { label: 'Completed',      value: s.completed, cls: 'green',                                     filter: 'completed', icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
+    { label: 'Active',         value: s.pending,   cls: 'orange',                                    filter: 'active',    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { label: 'Overdue',        value: s.overdue,   cls: s.overdue > 0 ? 'orange' : '', filter: 'overdue', isOverdue: s.overdue > 0, icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>' }
   ];
 
   App.qs('#statsGrid').innerHTML = cards.map((c, i) => `
-    <div class="stat-card animate-in ${c.isOverdue ? 'is-overdue' : ''}" style="--delay:${i * 50}ms">
+    <a href="pages/tasks.html?status=${c.filter}" class="stat-card animate-in ${c.isOverdue ? 'is-overdue' : ''}" style="--delay:${i * 50}ms" title="View ${c.label} in Tasks">
       <div class="stat-card__icon ${c.cls}" style="${c.isOverdue ? 'color:var(--danger);background:rgba(239,68,68,0.15)' : ''}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
       </div>
@@ -53,7 +53,7 @@ function renderStats() {
         <div class="stat-card__value" style="${c.isOverdue ? 'color:var(--danger)' : ''}">${c.value}</div>
         <div class="stat-card__label">${c.label}</div>
       </div>
-    </div>`).join('');
+    </a>`).join('');
 }
 
 /* ---- Animated progress ring (completion rate) ---------------------------- */
@@ -183,7 +183,7 @@ function renderUpcomingExams() {
     const days = Dates.daysFromToday(s.examDate);
     const label = days === 0 ? 'Today!' : days === 1 ? 'Tomorrow' : `in ${days} days`;
     return `
-      <div class="list-item">
+      <a href="pages/subjects.html?focus=${encodeURIComponent(s.id)}" class="list-item" title="View ${App.escapeHtml(s.name)} in Subjects">
         <span class="countdown" style="border-left: 3px solid ${s.color}">
           <b>${days}</b><small>${days === 1 ? 'day' : 'days'}</small>
         </span>
@@ -195,7 +195,7 @@ function renderUpcomingExams() {
           </div>
         </div>
         <span class="dot" style="background:${s.color};width:14px;height:14px"></span>
-      </div>`;
+      </a>`;
   }).join('');
 }
 
@@ -210,13 +210,13 @@ function renderSubjectProgress() {
   }
 
   box.innerHTML = subjects.slice(0, 4).map(s => `
-    <div class="progress-row">
+    <a href="pages/subjects.html?focus=${encodeURIComponent(s.id)}" class="progress-row" style="display:block" title="View ${App.escapeHtml(s.name)} in Subjects">
       <div class="progress-row__top">
         <span><span class="dot" style="background:${s.color};display:inline-block;margin-right:6px"></span>${App.escapeHtml(s.name)}</span>
         <b>${s.doneTasks}/${s.totalTasks} · ${s.percent}%</b>
       </div>
-      <div class="bar"><div class="bar__fill" data-pct="${s.percent}" style="width:0"></div></div>
-    </div>`).join('');
+      <div class="bar"><div class="bar__fill" data-pct="${s.percent}" style="width:0; background:${s.color}"></div></div>
+    </a>`).join('');
 
   requestAnimationFrame(() => {
     App.qsa('#dashSubjectProgress .bar__fill').forEach(el => {

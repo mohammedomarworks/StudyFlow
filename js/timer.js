@@ -361,7 +361,7 @@ function renderTodaySessions() {
             ${task ? `Task: ${App.escapeHtml(task.title)} · ` : ''}Finished at ${timeStr}
           </div>
         </div>
-        <button class="icon-btn danger btn-sm" data-delete-session="${s.id}" title="Remove session log">
+        <button class="icon-btn danger btn-sm" data-delete-session="${s.id}" title="Remove session log" aria-label="Remove focus session log">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
         </button>
       </div>`;

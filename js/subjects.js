@@ -87,7 +87,7 @@ function render() {
           <div><b>${s.percent}%</b><small>progress</small></div>
         </div>
 
-        <div class="bar"><div class="bar__fill" style="width:0"></div></div>
+        <div class="bar"><div class="bar__fill" style="width:0; background:${s.color}"></div></div>
 
         <div class="subject-card__foot">
           ${examBadge}

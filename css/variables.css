@@ -47,7 +47,7 @@
   --text:       #1e1b2e;   /* headings / primary text */
   --text-body:  #3a3550;   /* body copy */
   --text-muted: #6f6a86;   /* secondary text */
-  --text-faint: #9c98ad;   /* placeholders, captions */
+  --text-faint: #78738e;   /* placeholders, captions - WCAG AA compliant */
 
   /* ---- Elevation ----------------------------------------------------- */
   --shadow-sm: 0 1px 2px rgba(76, 29, 149, 0.06);
@@ -129,7 +129,7 @@
   --text:       #f1eefb;
   --text-body:  #d6d1e8;
   --text-muted: #a49fbd;
-  --text-faint: #7d7897;
+  --text-faint: #928dae;
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);

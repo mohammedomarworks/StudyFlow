@@ -91,13 +91,26 @@ function render() {
 
   grid.innerHTML = cells;
 
-  // Click or keyboard (Enter/Space) opens the day detail modal.
+  // Click or keyboard (Enter/Space to open, Arrow keys to navigate)
   App.qsa('.cal-cell[data-date]', grid).forEach(cell => {
     cell.addEventListener('click', () => openDay(cell.dataset.date));
     cell.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         openDay(cell.dataset.date);
+      } else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+        const allCells = App.qsa('.cal-cell[data-date]', grid);
+        const idx = allCells.indexOf(cell);
+        if (idx === -1) return;
+        let target = idx;
+        if (e.key === 'ArrowLeft' && idx > 0) target = idx - 1;
+        else if (e.key === 'ArrowRight' && idx < allCells.length - 1) target = idx + 1;
+        else if (e.key === 'ArrowUp' && idx >= 7) target = idx - 7;
+        else if (e.key === 'ArrowDown' && idx + 7 < allCells.length) target = idx + 7;
+        if (target !== idx) {
+          e.preventDefault();
+          allCells[target].focus();
+        }
       }
     });
   });
@@ -126,7 +139,7 @@ function openDay(iso) {
         </div>
         <h3>Nothing scheduled</h3>
         <p>No tasks or exams are scheduled for this day.</p>
-        <a href="tasks.html" class="btn btn-primary mt-4">Add Task in Tasks View</a>
+        <a href="tasks.html?action=new&date=${iso}" class="btn btn-primary mt-4">+ Add Task for this Day</a>
       </div>`;
     App.qs('#dayModalBody').innerHTML = html;
     App.openModal('#dayModal');
@@ -184,7 +197,7 @@ function openDay(iso) {
   html += `
     <div class="flex-between wrap gap-2 mt-6">
       <a href="tasks.html" class="btn btn-ghost">View All Tasks</a>
-      <a href="tasks.html" class="btn btn-primary">+ Add Task</a>
+      <a href="tasks.html?action=new&date=${iso}" class="btn btn-primary">+ Add Task</a>
     </div>`;
 
   App.qs('#dayModalBody').innerHTML = html;

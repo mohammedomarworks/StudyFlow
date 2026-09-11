@@ -39,14 +39,14 @@ function renderOverall() {
 
   // Summary tiles
   const tiles = [
-    { label: 'Total Tasks', value: s.total,     cls: '',                                             icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
-    { label: 'Completed',   value: s.completed, cls: 'green',                                        icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
-    { label: 'Pending',     value: s.pending,   cls: 'orange',                                       icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
-    { label: 'Overdue',     value: s.overdue,   cls: s.overdue > 0 ? 'orange' : '', isOverdue: s.overdue > 0, icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>' }
+    { label: 'Total Tasks', value: s.total,     cls: '',                                             filter: 'all',       icon: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>' },
+    { label: 'Completed',   value: s.completed, cls: 'green',                                        filter: 'completed', icon: '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/>' },
+    { label: 'Pending',     value: s.pending,   cls: 'orange',                                       filter: 'active',    icon: '<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>' },
+    { label: 'Overdue',     value: s.overdue,   cls: s.overdue > 0 ? 'orange' : '', filter: 'overdue', isOverdue: s.overdue > 0, icon: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/>' }
   ];
 
   App.qs('#overallTiles').innerHTML = tiles.map(t => `
-    <div class="stat-card ${t.isOverdue ? 'is-overdue' : ''}">
+    <a href="tasks.html?status=${t.filter}" class="stat-card ${t.isOverdue ? 'is-overdue' : ''}" title="View ${t.label} in Tasks">
       <div class="stat-card__icon ${t.cls}" style="${t.isOverdue ? 'color:var(--danger);background:rgba(239,68,68,0.15)' : ''}">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${t.icon}</svg>
       </div>
@@ -54,7 +54,7 @@ function renderOverall() {
         <div class="stat-card__value" style="${t.isOverdue ? 'color:var(--danger)' : ''}">${t.value}</div>
         <div class="stat-card__label">${t.label}</div>
       </div>
-    </div>`).join('');
+    </a>`).join('');
 }
 
 /* ==========================================================================
@@ -188,6 +188,11 @@ function renderFocusAnalytics() {
 function renderActivityTimeline() {
   const activities = Store.getActivity(15);
   const box = App.qs('#activityTimeline');
+
+  const countBadge = App.qs('#activityCountBadge');
+  if (countBadge) {
+    countBadge.textContent = `${activities.length} events`;
+  }
 
   if (!activities.length) {
     box.innerHTML = `<p class="text-muted text-center" style="padding:var(--space-5) 0">No activity recorded yet.</p>`;

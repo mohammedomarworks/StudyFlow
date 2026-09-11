@@ -37,6 +37,10 @@ function readUrlParams() {
   if (params.has('status')) {
     view.status = params.get('status');
   }
+  if (params.get('action') === 'new' || params.has('date')) {
+    const prefillDate = params.get('date') || Dates.todayISO();
+    setTimeout(() => openTaskModal(null, prefillDate), 100);
+  }
 }
 
 /* ==========================================================================
@@ -255,7 +259,7 @@ function bindModal() {
   });
 }
 
-function openTaskModal(id = null) {
+function openTaskModal(id = null, prefillDate = null) {
   const form = App.qs('#taskForm');
   form.reset();
   App.qsa('.field').forEach(f => f.classList.remove('invalid'));
@@ -276,7 +280,7 @@ function openTaskModal(id = null) {
     // Add mode
     App.qs('#taskModalTitle').textContent = 'Add Task';
     App.qs('#taskId').value = '';
-    App.qs('#taskDue').value = Dates.todayISO();
+    App.qs('#taskDue').value = prefillDate || Dates.todayISO();
     App.qs('#taskCategory').value = 'Assignment';
     App.qs('#taskPriority').value = 'medium';
     if (view.subject) {

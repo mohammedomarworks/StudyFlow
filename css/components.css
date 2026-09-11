@@ -141,6 +141,14 @@
 .btn-danger:hover { filter: brightness(0.92); transform: translateY(-2px); }
 
 .btn-sm { padding: 0.45rem 0.8rem; font-size: var(--fs-xs); }
+.btn-lg { padding: 0.85rem 1.6rem; font-size: var(--fs-base); border-radius: var(--radius-sm); }
+.btn-running {
+  background: var(--warning) !important;
+  color: #1c1917 !important;
+  border-color: var(--warning) !important;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--warning) 30%, transparent) !important;
+}
+.btn-running:hover { filter: brightness(0.92); }
 .btn-block { width: 100%; }
 
 /* Icon-only button */
@@ -259,6 +267,7 @@
 .field.invalid .field-error { display: block; }
 
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); }
+.form-row-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-4); }
 
 /* Color swatch picker (Subjects form) */
 .swatches { display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -395,6 +404,47 @@
 .toast.error   { border-left-color: var(--danger); }
 .toast.info    { border-left-color: var(--info); }
 .toast svg { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* ==========================================================================
+   EMPTY STATES
+   ========================================================================== */
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--surface);
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+}
+.empty__icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+  margin-bottom: var(--space-3);
+}
+.empty__icon svg {
+  width: 26px;
+  height: 26px;
+}
+.empty h3 {
+  font-size: var(--fs-lg);
+  color: var(--text);
+  margin-bottom: var(--space-2);
+}
+.empty p {
+  color: var(--text-muted);
+  max-width: 44ch;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
 
 /* ==========================================================================
    NAV SEARCH BUTTON & GLOBAL SEARCH (Cmd+K)
@@ -624,7 +674,8 @@ kbd, .kbd-badge {
 /* ==========================================================================
    ACTIVITY FEED
    ========================================================================== */
-.activity-list {
+.activity-list,
+.activity-feed {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -679,6 +730,72 @@ kbd, .kbd-badge {
 .settings-row__info { flex: 1; }
 .settings-row__title { font-weight: 600; color: var(--text); }
 .settings-row__desc { font-size: var(--fs-xs); color: var(--text-muted); margin-top: 2px; }
+
+.settings-card {
+  border-radius: var(--radius);
+}
+.danger-card {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: color-mix(in srgb, var(--danger) 2.5%, var(--surface));
+}
+
+.theme-options-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+.theme-option {
+  position: relative;
+  cursor: pointer;
+  display: block;
+}
+.theme-option input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.theme-option-box {
+  padding: var(--space-4);
+  background: var(--surface-2);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+.theme-option-box:hover {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+}
+.theme-option input:checked + .theme-option-box {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+  box-shadow: 0 0 0 1px var(--primary), var(--shadow-sm);
+}
+.theme-option input:focus-visible + .theme-option-box {
+  outline: 3px solid var(--purple-400);
+  outline-offset: 2px;
+}
+.theme-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.theme-option-box b {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text);
+}
+.theme-option-box small {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
 
 .theme-options {
   display: flex;
@@ -813,11 +930,27 @@ kbd, .kbd-badge {
   line-height: 1;
   font-variant-numeric: tabular-nums;
 }
+.timer-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+.timer-card .field {
+  text-align: left;
+}
+.timer-circle {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.timer-sublabel,
 .timer-status {
   font-size: var(--fs-sm);
   color: var(--text-muted);
   font-weight: 600;
   margin-top: var(--space-2);
+  letter-spacing: 0.02em;
 }
 
 .timer-controls {
