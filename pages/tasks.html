@@ -73,11 +73,23 @@
           <h1>Tasks</h1>
           <p>Plan, track and complete your study tasks. Filter by category, priority or subject.</p>
         </div>
-        <button class="btn btn-primary" id="addTaskBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
-          Add Task
-        </button>
+        <div class="flex gap-2 wrap">
+          <button class="btn btn-ghost" id="bulkModeBtn" aria-label="Toggle task selection mode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+            <span id="bulkModeBtnText">Select</span>
+          </button>
+          <button class="btn btn-primary" id="addTaskBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            Add Task
+          </button>
+        </div>
       </div>
+
+      <!-- Suggested Next Task / Focus Recommendation -->
+      <div id="suggestedTaskContainer"></div>
+
+      <!-- Status Tabs: All, Active, Due Today, Overdue, Due Soon, Completed -->
+      <div class="task-tabs" id="taskTabs" role="tablist" aria-label="Task status filters"></div>
 
       <!-- Toolbar: search · filter by subject · filter by status · priority · category · sort -->
       <div class="toolbar">
@@ -91,8 +103,10 @@
         <select class="select" id="filterStatus" aria-label="Filter by status">
           <option value="all">All status</option>
           <option value="active">Active</option>
-          <option value="completed">Completed</option>
+          <option value="today">Due today</option>
           <option value="overdue">Overdue</option>
+          <option value="soon">Due soon (3d)</option>
+          <option value="completed">Completed</option>
         </select>
         <select class="select" id="filterPriority" aria-label="Filter by priority">
           <option value="all">All priorities</option>
@@ -104,16 +118,41 @@
           <option value="all">All categories</option>
         </select>
         <select class="select" id="sortBy" aria-label="Sort tasks">
-          <option value="due-asc">Sort: Due date ↑</option>
-          <option value="due-desc">Sort: Due date ↓</option>
-          <option value="priority">Sort: Priority</option>
-          <option value="created">Sort: Recently added</option>
-          <option value="title">Sort: Title (A-Z)</option>
+          <option value="due-asc">Sort: Due date (earliest)</option>
+          <option value="due-desc">Sort: Due date (latest)</option>
+          <option value="priority-high">Sort: Priority (highest)</option>
+          <option value="priority-low">Sort: Priority (lowest)</option>
+          <option value="created-desc">Sort: Added (newest)</option>
+          <option value="estimate-asc">Sort: Duration (shortest)</option>
+          <option value="estimate-desc">Sort: Duration (longest)</option>
+          <option value="title-asc">Sort: Title (A-Z)</option>
         </select>
       </div>
 
-      <!-- Result count -->
-      <p class="text-muted mt-2" id="resultCount" style="margin-bottom:var(--space-4)"></p>
+      <!-- Bulk Selection Actions Bar -->
+      <div id="bulkBar" class="bulk-bar" hidden>
+        <div class="flex gap-3 align-center">
+          <label class="flex gap-2 align-center" style="cursor:pointer;font-weight:600;font-size:var(--fs-sm)">
+            <input type="checkbox" class="check" id="selectAllCheckbox" aria-label="Select all visible tasks" />
+            <span id="bulkSelectedCount">0 selected</span>
+          </label>
+        </div>
+        <div class="bulk-bar__actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="bulkCompleteBtn">✓ Mark Complete</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="bulkActiveBtn">↻ Mark Active</button>
+          <button type="button" class="btn btn-danger btn-sm" id="bulkDeleteBtn">🗑️ Delete</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="bulkCancelBtn">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Result count & Workload summary -->
+      <div class="task-summary-bar" id="taskSummaryBar">
+        <div class="task-summary-left">
+          <span id="resultCount"></span>
+          <span id="workloadBadge" class="task-workload-badge" hidden></span>
+        </div>
+        <div id="activeFiltersContainer"></div>
+      </div>
 
       <!-- Task list -->
       <div class="task-list" id="taskList"></div>
@@ -135,20 +174,20 @@
           <input type="hidden" id="taskId" />
 
           <div class="field" id="f-title">
-            <label>Title <span class="req">*</span></label>
-            <input class="input" id="taskTitle" maxlength="120" placeholder="e.g. Finish chapter 4 exercises" />
+            <label for="taskTitle">Title <span class="req">*</span></label>
+            <input class="input" id="taskTitle" maxlength="120" placeholder="e.g. Finish chapter 4 exercises" required />
             <div class="field-error">Please enter a task title (at least 2 characters).</div>
           </div>
 
           <div class="form-row">
             <div class="field">
-              <label>Subject</label>
+              <label for="taskSubject">Subject</label>
               <select class="select" id="taskSubject">
                 <option value="">— No subject —</option>
               </select>
             </div>
             <div class="field">
-              <label>Category</label>
+              <label for="taskCategory">Category</label>
               <select class="select" id="taskCategory">
                 <option value="Assignment">Assignment</option>
                 <option value="Reading">Reading</option>
@@ -163,12 +202,12 @@
 
           <div class="form-row">
             <div class="field" id="f-due">
-              <label>Due date <span class="req">*</span></label>
-              <input type="date" class="input" id="taskDue" />
+              <label for="taskDue">Due date <span class="req">*</span></label>
+              <input type="date" class="input" id="taskDue" required />
               <div class="field-error">Please choose a due date.</div>
             </div>
             <div class="field">
-              <label>Priority</label>
+              <label for="taskPriority">Priority</label>
               <select class="select" id="taskPriority">
                 <option value="low">Low</option>
                 <option value="medium" selected>Medium</option>
@@ -178,13 +217,13 @@
           </div>
 
           <div class="field">
-            <label>Estimated Duration (minutes)</label>
+            <label for="taskEstimate">Estimated Duration (minutes)</label>
             <input type="number" class="input" id="taskEstimate" min="0" max="480" step="5" placeholder="e.g. 45" />
-            <small class="text-faint">Optional time estimate for study planning.</small>
+            <small class="text-faint">Minutes you plan to spend studying (e.g. 30, 45, 90).</small>
           </div>
 
           <div class="field">
-            <label>Notes</label>
+            <label for="taskNotes">Notes</label>
             <textarea class="textarea" id="taskNotes" maxlength="500" placeholder="Optional details, instructions or reference materials…"></textarea>
           </div>
         </div>
