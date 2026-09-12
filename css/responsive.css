@@ -71,6 +71,11 @@
 
   /* Calendar summary strip at tablet */
   .cal-summary-strip { grid-template-columns: 1fr; }
+
+  /* Notes toolbar at tablet */
+  .notes-toolbar-wrap .toolbar { flex-direction: column; align-items: stretch; }
+  .notes-filter-pills { width: 100%; justify-content: center; }
+  .notes-filter-pills .btn { flex: 1; text-align: center; }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
@@ -140,7 +145,11 @@
   .chart-lbl { font-size: 0.65rem; }
   .dow-track { height: 75px; width: 10px; }
   .dow-val { font-size: 0.6rem; }
-  .dow-label { font-size: 0.65rem; }
+  /* Notes phone layout */
+  .notes-grid { grid-template-columns: 1fr; }
+  .note-card { padding: var(--space-4); min-height: auto; }
+  .note-detail-modal { max-height: 94vh; }
+  .note-detail-title { font-size: var(--fs-xl); }
 }
 
 /* ---- <= 375px : small phones -------------------------------------------- */
@@ -162,6 +171,11 @@
   .cal-cell__num { font-size: 0.68rem; }
   .cal-summary-metrics { grid-template-columns: 1fr; }
   .cal-jump-input { max-width: 130px; font-size: 0.7rem; }
+
+  /* Notes small phone adjustments */
+  .note-detail-content { font-size: var(--fs-sm); }
+  .note-card__head { flex-direction: column; gap: var(--space-2); }
+  .note-card .task-item__actions { align-self: flex-end; }
 }
 
 /* ---- <= 320px : ultra-small screens ------------------------------------- */
@@ -173,4 +187,8 @@
   .cal-cell__num { font-size: 0.65rem; }
   .cal-task-summary { display: none; } /* On 320px, rely on tags and dots to avoid overflow */
   .cal-tags-row { gap: 1px; }
+
+  /* Notes ultra-small screen adjustments */
+  .note-card { padding: var(--space-3); }
+  .note-card__foot { flex-direction: column; align-items: flex-start; gap: 4px; }
 }

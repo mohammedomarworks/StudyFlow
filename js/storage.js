@@ -339,6 +339,7 @@ const Store = {
       subjectId: typeof n.subjectId === 'string' ? n.subjectId : '',
       content: typeof n.content === 'string' ? n.content : '',
       tags: Array.isArray(n.tags) ? n.tags.filter(tag => typeof tag === 'string') : [],
+      pinned: Boolean(n.pinned),
       createdAt: typeof n.createdAt === 'string' ? n.createdAt : new Date().toISOString(),
       updatedAt: typeof n.updatedAt === 'string' ? n.updatedAt : (typeof n.createdAt === 'string' ? n.createdAt : new Date().toISOString())
     }));
@@ -352,20 +353,33 @@ const Store = {
   saveNote(data) {
     const notes = this.getNotes();
     const now = new Date().toISOString();
-    if (data.id) {
-      const i = notes.findIndex(n => n.id === data.id);
-      if (i > -1) {
-        notes[i] = { ...notes[i], ...data, updatedAt: now };
-      }
+    const i = data.id ? notes.findIndex(n => n.id === data.id) : -1;
+    if (i > -1) {
+      notes[i] = {
+        ...notes[i],
+        ...data,
+        pinned: typeof data.pinned === 'boolean' ? data.pinned : notes[i].pinned,
+        updatedAt: data.updatedAt || now
+      };
     } else {
-      data.id = this.uid();
-      data.createdAt = now;
-      data.updatedAt = now;
+      data.id = data.id || this.uid();
+      data.pinned = Boolean(data.pinned);
+      data.createdAt = data.createdAt || now;
+      data.updatedAt = data.updatedAt || now;
       notes.push(data);
       this.logActivity('note_create', `Created note "${data.title}"`, { noteId: data.id });
     }
     this._write(this.KEYS.notes, notes);
     return data;
+  },
+
+  togglePinNote(id) {
+    const notes = this.getNotes();
+    const note = notes.find(n => n.id === id);
+    if (!note) return false;
+    note.pinned = !note.pinned;
+    this._write(this.KEYS.notes, notes);
+    return note.pinned;
   },
 
   deleteNote(id) {
@@ -773,8 +787,8 @@ const Store = {
     ];
 
     const notes = [
-      { id: 'n1', title: 'Integration techniques', subjectId: 's1', content: 'Key methods:\n• u-substitution\n• integration by parts (LIATE rule)\n• partial fractions\n\nPractice at least 3 problems of each type before the exam.', tags: ['calculus', 'math'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      { id: 'n2', title: 'Big-O cheat sheet',      subjectId: 's2', content: 'O(1) constant · O(log n) binary search · O(n) linear scan · O(n log n) good sorts · O(n^2) nested loops.\n\nAlways state best/avg/worst case.', tags: ['algorithms', 'cs'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      { id: 'n1', title: 'Integration techniques', subjectId: 's1', content: 'Key methods:\n• u-substitution\n• integration by parts (LIATE rule)\n• partial fractions\n\nPractice at least 3 problems of each type before the exam.', tags: ['calculus', 'math'], pinned: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      { id: 'n2', title: 'Big-O cheat sheet',      subjectId: 's2', content: 'O(1) constant · O(log n) binary search · O(n) linear scan · O(n log n) good sorts · O(n^2) nested loops.\n\nAlways state best/avg/worst case.', tags: ['algorithms', 'cs'], pinned: false, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
     ];
 
     const sessions = [

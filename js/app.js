@@ -282,8 +282,8 @@ const App = {
       notes.slice(0, 4).forEach(n => {
         const subj = Store.getSubject(n.subjectId);
         html += `
-          <a href="${this.path('notes.html')}?search=${encodeURIComponent(n.title)}" class="search-result-item">
-            <span class="search-item__icon">📝</span>
+          <a href="${this.path('notes.html')}?noteId=${encodeURIComponent(n.id)}" class="search-result-item">
+            <span class="search-item__icon">${n.pinned ? '📌' : '📝'}</span>
             <div class="search-item__info">
               <div class="search-item__title">${this.escapeHtml(n.title)}</div>
               <div class="search-item__sub">${subj ? `${this.escapeHtml(subj.name)} · ` : ''}Updated ${Dates.timeAgo(n.updatedAt)}</div>

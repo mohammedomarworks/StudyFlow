@@ -487,7 +487,7 @@ function renderSuggestedTask(visibleTasks) {
         <div class="suggested-card__content">
           <div class="suggested-card__title">${App.escapeHtml(task.title)}</div>
           <div class="suggested-card__meta">
-            ${subject ? `<span class="badge badge-muted"><span class="dot" style="background:${subject.color}"></span>${App.escapeHtml(subject.name)}</span>` : ''}
+            ${subject ? `<a href="notes.html?subject=${task.subjectId}" class="badge badge-muted" title="View notes for ${App.escapeHtml(subject.name)}" style="text-decoration:none"><span class="dot" style="background:${subject.color}"></span>${App.escapeHtml(subject.name)}</a>` : ''}
             <span class="badge badge-muted priority-${task.priority}">● ${task.priority}</span>
             ${task.category && task.category !== 'General' ? `<span class="badge badge-category">${App.escapeHtml(task.category)}</span>` : ''}
             ${task.estimate ? `<span class="badge badge-estimate">⏱️ ${Dates.formatDuration(task.estimate)}</span>` : ''}
@@ -847,7 +847,7 @@ function taskCardHTML(t) {
         </div>
 
         <div class="task-item__meta">
-          ${subject ? `<span class="badge badge-muted"><span class="dot" style="background:${subject.color}"></span>${App.escapeHtml(subject.name)}</span>` : ''}
+          ${subject ? `<a href="notes.html?subject=${t.subjectId}" class="badge badge-muted" title="View notes for ${App.escapeHtml(subject.name)}" style="text-decoration:none"><span class="dot" style="background:${subject.color}"></span>${App.escapeHtml(subject.name)}</a>` : ''}
           <span class="badge badge-muted priority-${t.priority}">● ${t.priority}</span>
           ${t.category && t.category !== 'General' ? `<span class="badge badge-category">${App.escapeHtml(t.category)}</span>` : ''}
           ${t.estimate ? `<span class="badge badge-estimate">⏱️ ${Dates.formatDuration(t.estimate)}</span>` : ''}

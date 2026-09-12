@@ -77,24 +77,78 @@
         </button>
       </div>
 
-      <div class="toolbar">
-        <div class="search">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
-          <input class="input" id="noteSearch" type="search" placeholder="Search notes by title or content…" />
+      <!-- ===================== NOTES STATS STRIP ===================== -->
+      <section class="stats-grid mb-6" id="notesStatsStrip" aria-label="Notes statistics">
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:rgba(99,102,241,0.12); color:var(--primary)">📝</div>
+          <div class="stat-card__info">
+            <div class="stat-card__val" id="statTotalNotes">0</div>
+            <div class="stat-card__lbl">Total Notes</div>
+          </div>
         </div>
-        <select class="select" id="filterNoteSubject" aria-label="Filter by subject">
-          <option value="">All subjects</option>
-        </select>
-        <select class="select" id="sortNotesBy" aria-label="Sort notes">
-          <option value="updated">Sort: Recently updated</option>
-          <option value="created">Sort: Recently created</option>
-          <option value="title">Sort: Title (A-Z)</option>
-        </select>
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:rgba(16,185,129,0.12); color:var(--success)">📚</div>
+          <div class="stat-card__info">
+            <div class="stat-card__val" id="statSubjectsCovered">0</div>
+            <div class="stat-card__lbl">Subjects Documented</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:rgba(245,158,11,0.12); color:var(--warning)">📌</div>
+          <div class="stat-card__info">
+            <div class="stat-card__val" id="statPinnedNotes">0</div>
+            <div class="stat-card__lbl">Pinned References</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__icon" style="background:rgba(139,92,246,0.12); color:#8b5cf6">⏱️</div>
+          <div class="stat-card__info">
+            <div class="stat-card__val" id="statLatestUpdate" style="font-size:var(--fs-base); font-weight:700">—</div>
+            <div class="stat-card__lbl">Latest Revision</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ===================== TOOLBAR & FILTERS ===================== -->
+      <div class="notes-toolbar-wrap">
+        <div class="toolbar">
+          <div class="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+            <input class="input" id="noteSearch" type="search" placeholder="Search notes by title, content, or subject…" />
+          </div>
+
+          <div class="notes-filter-pills" id="filterNotePills" role="radiogroup" aria-label="Filter notes by status">
+            <button type="button" class="btn btn-ghost btn-sm active" data-filter="all" role="radio" aria-checked="true">
+              All (<span id="countAllNotes">0</span>)
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" data-filter="pinned" role="radio" aria-checked="false">
+              📌 Pinned (<span id="countPinnedNotes">0</span>)
+            </button>
+          </div>
+
+          <select class="select" id="filterNoteSubject" aria-label="Filter by subject">
+            <option value="">All subjects</option>
+          </select>
+
+          <select class="select" id="sortNotesBy" aria-label="Sort notes">
+            <option value="updated">Sort: Recently updated</option>
+            <option value="created">Sort: Recently created</option>
+            <option value="title_asc">Sort: Title (A–Z)</option>
+            <option value="title_desc">Sort: Title (Z–A)</option>
+            <option value="subject">Sort: Subject</option>
+          </select>
+        </div>
       </div>
 
-      <p class="text-muted mt-2" id="noteResultCount" style="margin-bottom:var(--space-4)"></p>
+      <div class="flex-between wrap gap-2 mt-3" style="margin-bottom:var(--space-4)">
+        <p class="text-muted" id="noteResultCount" style="margin:0"></p>
+        <button type="button" class="btn btn-ghost btn-sm" id="clearNoteFiltersBtn" style="display:none">
+          ✕ Clear filters
+        </button>
+      </div>
 
-      <div class="notes-grid" id="notesGrid"></div>
+      <!-- ===================== NOTES GRID ===================== -->
+      <div class="notes-grid" id="notesGrid" role="list"></div>
     </div>
   </main>
 
@@ -103,7 +157,7 @@
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="noteModalTitle">
       <div class="modal__head">
         <h3 id="noteModalTitle">Add Note</h3>
-        <button class="icon-btn" data-close aria-label="Close">
+        <button class="icon-btn" data-close aria-label="Close modal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       </div>
@@ -112,33 +166,89 @@
           <input type="hidden" id="noteId" />
 
           <div class="field" id="fn-title">
-            <label>Title <span class="req">*</span></label>
-            <input class="input" id="noteTitle" maxlength="100" placeholder="e.g. Chapter 3: Organic Chemistry Summary" />
+            <label for="noteTitle">Title <span class="req">*</span></label>
+            <input class="input" id="noteTitle" maxlength="100" placeholder="e.g. Chapter 3: Organic Chemistry Summary" required />
             <div class="field-error">Please enter a note title.</div>
           </div>
 
           <div class="field">
-            <label>Subject</label>
+            <label for="noteSubject">Subject</label>
             <select class="select" id="noteSubject">
               <option value="">— No subject —</option>
             </select>
           </div>
 
           <div class="field" id="fn-content">
-            <label>Content <span class="req">*</span></label>
-            <textarea class="textarea" id="noteContent" style="min-height:160px" maxlength="5000" placeholder="Write your notes, key formulas, takeaways, and explanations…"></textarea>
+            <label for="noteContent">Content <span class="req">*</span></label>
+            <textarea class="textarea" id="noteContent" style="min-height:180px" maxlength="10000" placeholder="Write your notes, key formulas, takeaways, and explanations…"></textarea>
             <div class="field-error">Please write something in the note.</div>
             <div class="flex-between mt-1" style="font-size:var(--fs-xs); color:var(--text-muted)">
               <span id="modalWordCount">0 words</span>
-              <span>Formatted text supported</span>
+              <span>Formatted plain text supported</span>
             </div>
           </div>
+
+          <div class="field mt-3">
+            <label class="checkbox-label" style="display:flex;align-items:center;gap:var(--space-2);cursor:pointer;user-select:none;font-size:var(--fs-sm)">
+              <input type="checkbox" id="notePinned" />
+              <span>📌 <b>Pin note to top</b> (Keep this study sheet easily accessible)</span>
+            </label>
+          </div>
         </div>
-        <div class="modal__foot">
-          <button type="button" class="btn btn-ghost" data-close>Cancel</button>
-          <button type="submit" class="btn btn-primary">Save Note</button>
+        <div class="modal__foot flex-between">
+          <small class="text-muted" style="font-size:var(--fs-xs)">Tip: <kbd>⌘+Enter</kbd> to save</small>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+            <button type="submit" class="btn btn-primary" id="saveNoteSubmitBtn">Save Note</button>
+          </div>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- NOTE DETAIL / READING MODAL -->
+  <div class="modal-overlay" id="noteDetailModal">
+    <div class="modal modal-lg note-detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailNoteTitle">
+      <div class="modal__head note-detail-modal__head">
+        <div class="note-detail-head-left">
+          <div class="flex items-center gap-2 mb-1">
+            <span id="detailNotePinBadge" class="badge badge-warning" style="display:none">📌 Pinned</span>
+            <span id="detailSubjectBadge"></span>
+          </div>
+          <h2 id="detailNoteTitle" class="note-detail-title">Note Title</h2>
+        </div>
+        <button class="icon-btn" data-close aria-label="Close note details">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        </button>
+      </div>
+      <div class="modal__body note-detail-modal__body">
+        <div class="note-detail-meta" id="detailNoteMeta">
+          <span id="detailTimestamp">Updated just now</span>
+          <span>·</span>
+          <span id="detailStats">0 words · 1 min read</span>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border);margin:var(--space-4) 0" />
+        <div class="note-detail-content" id="detailNoteContent"></div>
+      </div>
+      <div class="modal__foot flex-between wrap gap-3">
+        <div class="flex gap-2">
+          <button type="button" class="btn btn-ghost btn-sm" id="detailCopyBtn" title="Copy text to clipboard">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+            <span>Copy</span>
+          </button>
+          <button type="button" class="btn btn-ghost btn-sm" id="detailPinBtn" title="Toggle pin status">
+            <span id="detailPinBtnLabel">📌 Pin</span>
+          </button>
+        </div>
+        <div class="flex gap-2">
+          <button type="button" class="btn btn-danger btn-sm" id="detailDeleteBtn" title="Delete note">
+            Delete
+          </button>
+          <button type="button" class="btn btn-primary btn-sm" id="detailEditBtn" title="Edit note">
+            Edit Note
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
