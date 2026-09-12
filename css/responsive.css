@@ -65,6 +65,9 @@
 
   .timer-session-pickers { grid-template-columns: 1fr; }
   #overallTiles.stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  /* Calendar summary strip at tablet */
+  .cal-summary-strip { grid-template-columns: 1fr; }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
@@ -82,11 +85,27 @@
   #overallTiles.stats-grid { grid-template-columns: 1fr; }
   #focusAnalytics .stats-grid { grid-template-columns: 1fr !important; }
 
+  /* Calendar phone layouts */
+  .cal-card { padding: var(--space-3); }
+  .cal-head { gap: var(--space-2); }
+  .cal-head h2 { font-size: var(--fs-lg); min-width: auto; }
+  .cal-head__left { width: 100%; justify-content: space-between; }
+  .cal-head__right { width: 100%; justify-content: flex-end; }
   .cal-weekdays { gap: 3px; }
+  .cal-weekdays span { font-size: 0.68rem; letter-spacing: 0; }
   .cal-grid { gap: 3px; }
-  .cal-cell { min-height: 58px; padding: 3px; border-radius: 6px; }
-  .cal-cell__num { font-size: 0.75rem; }
-  .cal-event { font-size: 0.6rem; padding: 1px 3px; border-radius: 4px; }
+  .cal-cell { min-height: 64px; padding: 3px; border-radius: 6px; }
+  .cal-cell__num { font-size: 0.72rem; }
+  .cal-cell--today .cal-cell__num { width: 20px; height: 20px; font-size: 0.65rem; }
+  .cal-chip { font-size: 0.58rem; padding: 1px 3px; }
+  .cal-task-summary { padding: 1px 3px; font-size: 0.62rem; gap: 3px; }
+  .cal-dot { width: 5px; height: 5px; }
+  .cal-tag { font-size: 0.58rem; padding: 0 3px; }
+  .cal-legend { gap: var(--space-2); font-size: 0.72rem; }
+  .cal-summary-strip { gap: var(--space-3); }
+  .cal-summary-card { padding: var(--space-3); }
+  .cal-modal-task-item { flex-wrap: wrap; }
+  .cal-task-item__actions { width: 100%; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: var(--space-2); margin-top: var(--space-1); }
 
   .task-item { flex-wrap: wrap; padding: var(--space-3); }
   .task-item__actions { width: 100%; justify-content: flex-end; border-top: 1px solid var(--border); padding-top: var(--space-2); margin-top: var(--space-2); }
@@ -115,4 +134,25 @@
   .quick-action-btn svg { width: 15px; height: 15px; }
   .toolbar .select { width: 100%; min-width: 100%; }
   .timer-circle-wrap svg { max-width: min(210px, 68vw); }
+
+  /* Calendar small phone adjustments */
+  .cal-card { padding: var(--space-2); }
+  .cal-grid { gap: 2px; }
+  .cal-weekdays { gap: 2px; }
+  .cal-weekdays span { font-size: 0.62rem; }
+  .cal-cell { min-height: 56px; padding: 2px; }
+  .cal-cell__num { font-size: 0.68rem; }
+  .cal-summary-metrics { grid-template-columns: 1fr; }
+  .cal-jump-input { max-width: 130px; font-size: 0.7rem; }
+}
+
+/* ---- <= 320px : ultra-small screens ------------------------------------- */
+@media (max-width: 320px) {
+  .cal-card { padding: 4px; }
+  .cal-grid { gap: 2px; }
+  .cal-weekdays { gap: 2px; }
+  .cal-cell { min-height: 50px; padding: 1px; }
+  .cal-cell__num { font-size: 0.65rem; }
+  .cal-task-summary { display: none; } /* On 320px, rely on tags and dots to avoid overflow */
+  .cal-tags-row { gap: 1px; }
 }

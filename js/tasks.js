@@ -63,7 +63,10 @@ function readUrlParams() {
     }
   }
 
-  if (params.get('action') === 'new' || params.has('date')) {
+  if (params.has('edit')) {
+    const editId = params.get('edit');
+    setTimeout(() => openTaskModal(editId), 100);
+  } else if (params.get('action') === 'new' || params.has('date')) {
     const prefillDate = params.get('date') || Dates.todayISO();
     setTimeout(() => openTaskModal(null, prefillDate), 100);
   }

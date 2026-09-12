@@ -69,35 +69,59 @@
       <div class="page-header flex-between wrap gap-4">
         <div>
           <h1>Calendar</h1>
-          <p>See your tasks and exams laid out across the month. Click any day to manage items or add tasks.</p>
+          <p>See your tasks and exams laid out across the month. Click any day to view daily workload or manage items.</p>
+        </div>
+        <div class="flex gap-2">
+          <a href="tasks.html?action=new" class="btn btn-primary btn-sm">+ Add Task</a>
         </div>
       </div>
 
-      <div class="card">
-        <!-- Month navigation -->
+      <!-- Planning & Deadlines Summary Strip -->
+      <section class="cal-summary-strip" aria-label="Calendar overview and upcoming deadlines">
+        <!-- Week planning summary (rendered by calendar.js) -->
+        <div class="cal-summary-card" id="calWeekSummary" role="region" aria-label="This week summary">
+          <div class="cal-summary-loading">Loading week summary...</div>
+        </div>
+
+        <!-- Upcoming deadlines & exams (rendered by calendar.js) -->
+        <div class="cal-summary-card" id="calUpcoming" role="region" aria-label="Upcoming deadlines and exams">
+          <div class="cal-summary-loading">Loading upcoming items...</div>
+        </div>
+      </section>
+
+      <div class="card cal-card">
+        <!-- Month navigation & controls -->
         <div class="cal-head">
-          <h2 id="calMonthLabel">—</h2>
-          <div class="flex gap-2">
+          <div class="cal-head__left flex items-center gap-3 wrap">
+            <h2 id="calMonthLabel">—</h2>
+            <div class="cal-jump-wrap">
+              <input type="date" id="calJumpDate" class="cal-jump-input" aria-label="Jump to specific date" title="Jump to specific date" />
+            </div>
+          </div>
+          <div class="cal-head__right flex items-center gap-2">
             <button class="btn btn-ghost btn-sm" id="calToday">Today</button>
-            <button class="icon-btn" id="calPrev" aria-label="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-            <button class="icon-btn" id="calNext" aria-label="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
+            <button class="icon-btn" id="calPrev" aria-label="Previous month" title="Previous month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+            <button class="icon-btn" id="calNext" aria-label="Next month" title="Next month"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
           </div>
         </div>
 
         <!-- Weekday headers -->
-        <div class="cal-weekdays">
+        <div class="cal-weekdays" aria-hidden="true">
           <span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span>
         </div>
 
         <!-- Day grid (rendered by calendar.js) -->
-        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-grid" id="calGrid" role="grid" aria-label="Monthly Calendar"></div>
 
         <!-- Legend -->
-        <div class="cal-legend">
+        <div class="cal-legend" aria-label="Calendar legend">
           <span><span class="dot" style="background:var(--primary)"></span> Task due</span>
           <span><span class="dot" style="background:var(--danger)"></span> Exam</span>
-          <span><span class="dot" style="background:var(--success)"></span> Done</span>
-          <span><span class="dot" style="background:var(--primary);outline:2px solid var(--primary);outline-offset:1px"></span> Today</span>
+          <span><span class="cal-legend-pill cal-legend-pill--overdue">⚠️ Overdue</span></span>
+          <span><span class="cal-legend-pill cal-legend-pill--heavy">⚡ Heavy day</span></span>
+          <span><span class="cal-legend-pill cal-legend-pill--done">✓ All done</span></span>
+          <span><span class="cal-legend-ring"></span> Today</span>
+          <span><span class="cal-legend-selected"></span> Selected</span>
         </div>
       </div>
     </div>
@@ -105,9 +129,12 @@
 
   <!-- DAY DETAIL MODAL -->
   <div class="modal-overlay" id="dayModal">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dayModalTitle">
+    <div class="modal cal-modal" role="dialog" aria-modal="true" aria-labelledby="dayModalTitle">
       <div class="modal__head">
-        <h3 id="dayModalTitle">—</h3>
+        <div>
+          <h3 id="dayModalTitle">—</h3>
+          <div class="cal-modal-subtitle text-muted" id="dayModalSubtitle"></div>
+        </div>
         <button class="icon-btn" data-close aria-label="Close">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
