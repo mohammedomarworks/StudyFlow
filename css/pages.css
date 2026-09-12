@@ -1269,40 +1269,110 @@
 /* ==========================================================================
    TIMER & STUDY SESSIONS PAGE
    ========================================================================== */
-.timer-view-grid {
+.timer-overview-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: var(--space-5);
-  align-items: start;
+  margin-bottom: var(--space-6);
 }
-.timer-session-pickers {
+
+.timer-overview-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.timer-stat-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--space-3);
-  margin-bottom: var(--space-5);
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.timer-stat-col {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   text-align: left;
 }
-.timer-stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-}
-.timer-stat-tile {
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  text-align: center;
-}
-.timer-stat-tile b {
-  display: block;
-  font-size: var(--fs-xl);
+
+.timer-stat-val {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
   color: var(--text);
   line-height: 1.1;
 }
-.timer-stat-tile small {
+
+.timer-stat-lbl {
   font-size: var(--fs-xs);
   color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
+/* Progress bar for daily goal */
+.timer-goal-wrap {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.timer-progress-track {
+  width: 100%;
+  height: 8px;
+  background: var(--border);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  position: relative;
+}
+
+.timer-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), #a855f7);
+  border-radius: var(--radius-pill);
+  transition: width 0.4s ease;
+}
+
+.timer-progress-fill.is-complete {
+  background: linear-gradient(90deg, #10b981, #059669);
+}
+
+.timer-weekly-subject {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+/* Session preview banner */
+.timer-preview-banner {
+  width: 100%;
+  max-width: 440px;
+  margin: var(--space-3) auto 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.timer-preview-banner b,
+.timer-preview-banner i {
+  color: var(--text);
+}
+
+/* Paused badge */
+.timer-paused-badge {
+  font-size: var(--fs-xs);
+  letter-spacing: 0.08em;
+  font-weight: 800;
+  margin-bottom: var(--space-1);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
 }
 
 /* Focus context banner (shows the linked task/subject on the timer) */
@@ -1312,18 +1382,54 @@
   gap: var(--space-2);
   width: 100%;
   max-width: 440px;
-  margin: var(--space-4) auto 0;
+  margin: var(--space-3) auto 0;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   background: var(--primary-soft);
+  border: 1px solid rgba(124, 58, 237, 0.2);
   color: var(--text);
-  font-size: var(--fs-sm);
+  font-size: var(--fs-xs);
   line-height: 1.4;
+  text-align: left;
 }
+
 .timer-context[hidden] { display: none; }
 .timer-context b { color: var(--text); font-weight: 700; }
-.timer-context .dot { width: 10px; height: 10px; }
-.timer-context__icon { flex-shrink: 0; }
+.timer-context .dot { width: 10px; height: 10px; flex-shrink: 0; }
+.timer-context__icon { flex-shrink: 0; font-size: var(--fs-sm); }
+.timer-context__badge {
+  background: var(--surface);
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--border);
+  font-weight: 600;
+  display: inline-block;
+}
+
+/* Session Completion Modal stats */
+.session-modal-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: var(--space-3);
+  text-align: center;
+}
+
+.session-modal-stat-card {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.session-modal-stat-card b {
+  display: block;
+  font-size: var(--fs-lg);
+  color: var(--text);
+  margin-top: 2px;
+}
 
 @media (max-width: 560px) {
   .timer-controls { flex-wrap: wrap; gap: var(--space-2); }

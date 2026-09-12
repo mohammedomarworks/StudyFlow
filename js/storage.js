@@ -459,6 +459,80 @@ const Store = {
     };
   },
 
+  /** Aggregate focus metrics for the current week (Sun–Sat) */
+  getWeeklyStudyStats() {
+    const sessions = this.getSessions().filter(s => s.type === 'focus');
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0=Sun
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - dayOfWeek);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    const weekSessions = sessions.filter(s => {
+      const d = new Date(s.completedAt);
+      return d >= startOfWeek && d < endOfWeek;
+    });
+
+    const totalMinutes = weekSessions.reduce((acc, s) => acc + (s.durationMinutes || 0), 0);
+    const sessionCount = weekSessions.length;
+    const avgMinutes = sessionCount ? Math.round(totalMinutes / sessionCount) : 0;
+
+    // Most studied subject this week
+    const subjectMinutes = {};
+    weekSessions.forEach(s => {
+      if (s.subjectId) {
+        subjectMinutes[s.subjectId] = (subjectMinutes[s.subjectId] || 0) + (s.durationMinutes || 0);
+      }
+    });
+
+    let mostStudiedSubjectId = null;
+    let maxSubjMin = 0;
+    for (const [sId, mins] of Object.entries(subjectMinutes)) {
+      if (mins > maxSubjMin) {
+        maxSubjMin = mins;
+        mostStudiedSubjectId = sId;
+      }
+    }
+
+    const mostStudiedSubject = mostStudiedSubjectId ? this.getSubject(mostStudiedSubjectId) : null;
+
+    return {
+      totalMinutes,
+      sessionCount,
+      avgMinutes,
+      mostStudiedSubject,
+      mostStudiedMinutes: maxSubjMin
+    };
+  },
+
+  /** Get total invested focus minutes for a specific task */
+  getTaskStudyMinutes(taskId) {
+    if (!taskId) return 0;
+    return this.getSessions()
+      .filter(s => s.taskId === taskId && s.type === 'focus')
+      .reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+  },
+
+  /** Get total focus minutes for a specific subject this week */
+  getSubjectWeeklyMinutes(subjectId) {
+    if (!subjectId) return 0;
+    const now = new Date();
+    const dayOfWeek = now.getDay();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - dayOfWeek);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    return this.getSessions()
+      .filter(s => s.subjectId === subjectId && s.type === 'focus' && new Date(s.completedAt) >= startOfWeek && new Date(s.completedAt) < endOfWeek)
+      .reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+  },
+
   /* ========================= SETTINGS =================================== */
   getSettings() {
     const defaults = {
@@ -468,7 +542,8 @@ const Store = {
         shortBreak: 5,
         longBreak: 15,
         sound: true,
-        autoBreak: false
+        autoBreak: false,
+        dailyGoal: 120   // daily focus goal in minutes (default 2h, 0 = disabled)
       }
     };
     const s = this._read(this.KEYS.settings, {});
@@ -491,7 +566,8 @@ const Store = {
         shortBreak: normalizeDuration(pomo.shortBreak, defaults.pomodoro.shortBreak, 1, 30),
         longBreak: normalizeDuration(pomo.longBreak, defaults.pomodoro.longBreak, 1, 60),
         sound: typeof pomo.sound === 'boolean' ? pomo.sound : defaults.pomodoro.sound,
-        autoBreak: typeof pomo.autoBreak === 'boolean' ? pomo.autoBreak : defaults.pomodoro.autoBreak
+        autoBreak: typeof pomo.autoBreak === 'boolean' ? pomo.autoBreak : defaults.pomodoro.autoBreak,
+        dailyGoal: normalizeDuration(pomo.dailyGoal != null ? pomo.dailyGoal : defaults.pomodoro.dailyGoal, defaults.pomodoro.dailyGoal, 0, 720)
       }
     };
   },

@@ -64,6 +64,7 @@
   .toolbar .select { flex: 1; min-width: 130px; }
 
   .timer-session-pickers { grid-template-columns: 1fr; }
+  .timer-overview-grid { grid-template-columns: 1fr; }
   #overallTiles.stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   /* Calendar summary strip at tablet */
@@ -121,7 +122,8 @@
   .toast { min-width: 0; width: 100%; }
 
   .quick-actions-bar { grid-template-columns: 1fr 1fr; gap: var(--space-2); }
-  .timer-stats-row { grid-template-columns: 1fr; }
+  .timer-stat-row { grid-template-columns: 1fr; gap: var(--space-2); }
+  .session-modal-stats-grid { grid-template-columns: 1fr; }
   .timer-circle-wrap svg { max-width: min(250px, 72vw); height: auto; }
   .timer-controls { flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
   .timer-controls .btn { flex: 1; min-width: 90px; }

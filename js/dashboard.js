@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function renderAllDashboardData() {
   renderStats();
+  renderFocusCard();
   renderProgressRing();
   renderTodayTasks();
   renderUpcomingTasks();
@@ -54,6 +55,55 @@ function renderStats() {
         <div class="stat-card__label">${c.label}</div>
       </div>
     </a>`).join('');
+}
+
+/* ---- Today's Focus & Daily Goal card ------------------------------------ */
+function renderFocusCard() {
+  const container = App.qs('#dashFocusContent');
+  if (!container) return;
+
+  const study = Store.getStudyStats();
+  const settings = Store.getSettings();
+  const pomo = settings.pomodoro || {};
+  const dailyGoal = pomo.dailyGoal != null ? pomo.dailyGoal : 120;
+
+  if (dailyGoal > 0) {
+    const pct = Math.min(100, Math.round((study.todayMinutes / dailyGoal) * 100));
+    const isGoalReached = study.todayMinutes >= dailyGoal;
+    const remaining = dailyGoal - study.todayMinutes;
+
+    container.innerHTML = `
+      <div class="flex-between align-center mb-2">
+        <div>
+          <span style="font-size:var(--fs-2xl); font-weight:800; color:var(--text); line-height:1.1">${Dates.formatDuration(study.todayMinutes)}</span>
+          <span class="text-muted" style="font-size:var(--fs-xs); display:block; margin-top:2px">${study.todaySessionsCount} ${study.todaySessionsCount === 1 ? 'session' : 'sessions'} today</span>
+        </div>
+        <div style="text-align:right">
+          <span class="badge badge-muted" style="font-size:var(--fs-xs)">${study.streakDays > 0 ? `🔥 ${study.streakDays}d streak` : '🔥 0d streak'}</span>
+          <span class="text-muted" style="font-size:var(--fs-xs); display:block; margin-top:4px">${pct}% of ${Dates.formatDuration(dailyGoal)} goal</span>
+        </div>
+      </div>
+      <div class="timer-progress-track mb-3" style="height:8px">
+        <div class="timer-progress-fill" style="width:${pct}%"></div>
+      </div>
+      <div class="flex-between align-center">
+        <small class="text-muted">${isGoalReached ? '<b style="color:var(--success)">🎉 Goal achieved today!</b>' : `${Dates.formatDuration(remaining)} left to reach goal`}</small>
+        <a href="pages/timer.html" class="btn btn-primary btn-sm">Start Focus</a>
+      </div>`;
+  } else {
+    container.innerHTML = `
+      <div class="flex-between align-center mb-3">
+        <div>
+          <span style="font-size:var(--fs-2xl); font-weight:800; color:var(--text); line-height:1.1">${Dates.formatDuration(study.todayMinutes)}</span>
+          <span class="text-muted" style="font-size:var(--fs-xs); display:block; margin-top:2px">${study.todaySessionsCount} ${study.todaySessionsCount === 1 ? 'session' : 'sessions'} today</span>
+        </div>
+        <span class="badge badge-muted">${study.streakDays > 0 ? `🔥 ${study.streakDays}d streak` : '🔥 0d streak'}</span>
+      </div>
+      <div class="flex-between align-center">
+        <small class="text-muted">Daily goal disabled</small>
+        <a href="pages/timer.html" class="btn btn-primary btn-sm">Start Focus</a>
+      </div>`;
+  }
 }
 
 /* ---- Animated progress ring (completion rate) ---------------------------- */

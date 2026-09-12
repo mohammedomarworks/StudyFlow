@@ -154,8 +154,20 @@
           </section>
         </div>
 
-        <!-- Right column: progress ring + subject overview + recent activity + quote -->
+        <!-- Right column: today's focus + progress ring + subject overview + recent activity + quote -->
         <div class="dash-col">
+          <!-- Today's Focus & Goal -->
+          <section class="card animate-in" style="--delay:70ms" id="dashFocusCard">
+            <div class="card__head flex-between">
+              <h2 class="card__title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--primary)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Today's Focus
+              </h2>
+              <a href="pages/timer.html" class="badge badge-primary">Open Timer</a>
+            </div>
+            <div id="dashFocusContent"><!-- injected by dashboard.js --></div>
+          </section>
+
           <!-- Overall Progress -->
           <section class="card animate-in" style="--delay:80ms">
             <div class="card__head">

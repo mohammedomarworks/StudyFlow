@@ -40,6 +40,11 @@ function initPomodoroForm() {
   App.qs('#pomoShort').value = pomo.shortBreak;
   App.qs('#pomoLong').value = pomo.longBreak;
 
+  const dailyGoalInput = App.qs('#pomoDailyGoal');
+  if (dailyGoalInput) {
+    dailyGoalInput.value = pomo.dailyGoal != null ? pomo.dailyGoal : 120;
+  }
+
   const soundToggle = App.qs('#pomoSound');
   const autoBreakToggle = App.qs('#pomoAutoBreak');
   if (soundToggle) soundToggle.checked = pomo.sound !== false;
@@ -51,13 +56,15 @@ function initPomodoroForm() {
     const focus = Math.max(1, Math.min(120, parseInt(App.qs('#pomoFocus').value, 10) || 25));
     const shortBreak = Math.max(1, Math.min(30, parseInt(App.qs('#pomoShort').value, 10) || 5));
     const longBreak = Math.max(1, Math.min(60, parseInt(App.qs('#pomoLong').value, 10) || 15));
+    const dailyGoal = dailyGoalInput ? Math.max(0, Math.min(720, parseInt(dailyGoalInput.value, 10) || 0)) : pomo.dailyGoal;
 
     // saveSettings merges the pomodoro object, so unspecified keys are kept.
     Store.saveSettings({
       pomodoro: {
         focus, shortBreak, longBreak,
         sound: soundToggle ? soundToggle.checked : pomo.sound,
-        autoBreak: autoBreakToggle ? autoBreakToggle.checked : pomo.autoBreak
+        autoBreak: autoBreakToggle ? autoBreakToggle.checked : pomo.autoBreak,
+        dailyGoal
       }
     });
 
@@ -65,6 +72,7 @@ function initPomodoroForm() {
     App.qs('#pomoFocus').value = focus;
     App.qs('#pomoShort').value = shortBreak;
     App.qs('#pomoLong').value = longBreak;
+    if (dailyGoalInput) dailyGoalInput.value = dailyGoal;
 
     App.toast('Timer settings saved!', 'success');
   });

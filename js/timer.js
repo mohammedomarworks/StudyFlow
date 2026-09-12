@@ -1,15 +1,14 @@
 /* ==========================================================================
    timer.js — Focus / Pomodoro Timer Logic
-   Features: Pomodoro (25m), Short Break (5m), Long Break (15m),
-   Subject & Task linking, SVG circular countdown, document title sync,
-   Web Audio alerts on completion, background-safe interval, session logging.
+   Features: Pomodoro, Short Break, Long Break, Subject & Task linking,
+   Study Overview (Daily Goal & Weekly Summary), SVG circular countdown,
+   Document title sync, Web Audio alerts on completion, background-safe
+   endTime interval, session completion modal with next actions,
+   and keyboard accessibility.
 
-   Refresh behavior (intentional): the running timer lives only in memory. If
-   the page is refreshed or closed mid-session, the timer resets to a fresh
-   "ready" state and NO partial session is logged. This keeps the study log
-   honest (only sessions the user actually sat through are recorded) and avoids
-   ambiguous resume edge-cases. The countdown itself is timestamp-based
-   (endTime), so it stays accurate even when the tab is backgrounded/throttled.
+   Refresh behavior: the running countdown state lives in memory and is derived
+   from state.endTime (clock-drift & background-tab safe). Only fully completed
+   focus sessions are logged to LocalStorage.
    ========================================================================== */
 
 const TIMER_RADIUS = 114;
@@ -29,9 +28,12 @@ document.addEventListener('DOMContentLoaded', () => {
   readUrlParams();
   populateDropdowns();
   bindTimerControls();
+  bindModalActions();
   setMode('pomodoro');
+  renderOverview();
   renderFocusContext();
   renderTodaySessions();
+  updateStartPreview();
   maybeAutostart();
 });
 
@@ -41,17 +43,32 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden && state.isRunning) tick();
 });
 
-/* Read URL params (e.g. from task card "Start Focus" button) */
+/* Read URL params (e.g. from task card "Start Focus" button or subject card) */
 function readUrlParams() {
   const params = new URLSearchParams(window.location.search);
   const subjectId = params.get('subjectId');
   const taskId = params.get('taskId');
 
-  if (subjectId) state.prefillSubjectId = subjectId;
-  if (taskId) state.prefillTaskId = taskId;
-  // Only the task "Start Focus" action opts into auto-start; browsing to the
-  // timer with a subject prefilled (e.g. from a Subject card) does not.
-  if (params.get('autostart') === '1') state.autostart = true;
+  if (taskId) {
+    const task = Store.getTask(taskId);
+    if (task) {
+      state.prefillTaskId = taskId;
+      if (task.subjectId && !subjectId) {
+        state.prefillSubjectId = task.subjectId;
+      }
+    }
+  }
+
+  if (subjectId && !state.prefillSubjectId) {
+    const subject = Store.getSubject(subjectId);
+    if (subject) {
+      state.prefillSubjectId = subjectId;
+    }
+  }
+
+  if (params.get('autostart') === '1') {
+    state.autostart = true;
+  }
 }
 
 /* ==========================================================================
@@ -65,7 +82,7 @@ function populateDropdowns() {
   subEl.innerHTML = '<option value="">— General Study —</option>' +
     subjects.map(s => `<option value="${s.id}">${App.escapeHtml(s.name)}</option>`).join('');
 
-  if (state.prefillSubjectId) {
+  if (state.prefillSubjectId && subjects.some(s => s.id === state.prefillSubjectId)) {
     subEl.value = state.prefillSubjectId;
   }
 
@@ -74,8 +91,12 @@ function populateDropdowns() {
   subEl.addEventListener('change', () => {
     updateTaskDropdown();
     renderFocusContext();
+    updateStartPreview();
   });
-  taskEl.addEventListener('change', renderFocusContext);
+  taskEl.addEventListener('change', () => {
+    renderFocusContext();
+    updateStartPreview();
+  });
 }
 
 function updateTaskDropdown() {
@@ -95,8 +116,81 @@ function updateTaskDropdown() {
   }
 }
 
-/* Show a small banner describing what the current session is linked to, and
-   auto-start the countdown when arriving from a task's "Start Focus" action. */
+/* ==========================================================================
+   Study Overview Strip: Daily Focus & Goal + Weekly Summary
+   ========================================================================== */
+function renderOverview() {
+  const study = Store.getStudyStats();
+  const settings = Store.getSettings();
+  const dailyGoal = settings.pomodoro && settings.pomodoro.dailyGoal != null ? settings.pomodoro.dailyGoal : 120;
+
+  // 1. Today card
+  const todayMinsEl = App.qs('#timerTodayMinutes');
+  const todaySessionsEl = App.qs('#timerTodaySessions');
+  const streakBadgeEl = App.qs('#timerStreakBadge');
+
+  if (todayMinsEl) todayMinsEl.textContent = Dates.formatDuration(study.todayMinutes);
+  if (todaySessionsEl) todaySessionsEl.textContent = study.todaySessionsCount;
+  if (streakBadgeEl) {
+    streakBadgeEl.textContent = study.streakDays > 0 ? `🔥 ${study.streakDays}-day streak` : '🔥 0-day streak';
+  }
+
+  // Daily goal calculation
+  const goalLabel = App.qs('#timerGoalLabel');
+  const goalPercent = App.qs('#timerGoalPercent');
+  const goalFill = App.qs('#timerGoalFill');
+  const goalRemaining = App.qs('#timerGoalRemaining');
+
+  if (dailyGoal > 0) {
+    const pct = Math.min(100, Math.round((study.todayMinutes / dailyGoal) * 100));
+    if (goalLabel) goalLabel.textContent = `Daily Goal: ${Dates.formatDuration(dailyGoal)}`;
+    if (goalPercent) goalPercent.textContent = `${pct}%`;
+    if (goalFill) {
+      goalFill.style.width = `${pct}%`;
+      goalFill.classList.toggle('is-complete', pct >= 100);
+    }
+    if (goalRemaining) {
+      if (study.todayMinutes >= dailyGoal) {
+        goalRemaining.innerHTML = `<b style="color:var(--success)">🎉 Daily goal achieved!</b> (${Dates.formatDuration(study.todayMinutes)} focused)`;
+      } else {
+        const left = dailyGoal - study.todayMinutes;
+        goalRemaining.textContent = `${Dates.formatDuration(left)} remaining to reach your goal`;
+      }
+    }
+  } else {
+    if (goalLabel) goalLabel.textContent = 'Daily Goal: Disabled';
+    if (goalPercent) goalPercent.textContent = '—';
+    if (goalFill) goalFill.style.width = '0%';
+    if (goalRemaining) goalRemaining.textContent = 'Daily goal is disabled in Settings.';
+  }
+
+  // 2. Weekly card
+  const weekly = Store.getWeeklyStudyStats();
+  const weekMinsEl = App.qs('#timerWeeklyMinutes');
+  const weekAvgEl = App.qs('#timerWeeklyAvg');
+  const weekSessionsBadge = App.qs('#timerWeeklySessionsBadge');
+  const weekTopSubjEl = App.qs('#timerWeeklyTopSubject');
+
+  if (weekMinsEl) weekMinsEl.textContent = Dates.formatDuration(weekly.totalMinutes);
+  if (weekAvgEl) weekAvgEl.textContent = `${weekly.avgMinutes}m`;
+  if (weekSessionsBadge) {
+    weekSessionsBadge.textContent = `${weekly.sessionCount} ${weekly.sessionCount === 1 ? 'session' : 'sessions'}`;
+  }
+  if (weekTopSubjEl) {
+    if (weekly.mostStudiedSubject) {
+      weekTopSubjEl.innerHTML = `
+        <span class="dot" style="background:${weekly.mostStudiedSubject.color}"></span>
+        <b>${App.escapeHtml(weekly.mostStudiedSubject.name)}</b>
+        <span class="text-muted">(${Dates.formatDuration(weekly.mostStudiedMinutes)})</span>`;
+    } else {
+      weekTopSubjEl.innerHTML = '<span class="text-muted">No focus logged yet</span>';
+    }
+  }
+}
+
+/* ==========================================================================
+   Focus Context (Task Estimate vs Investment & Subject Weekly Minutes)
+   ========================================================================== */
 function renderFocusContext() {
   const box = App.qs('#timerContext');
   if (!box) return;
@@ -110,13 +204,56 @@ function renderFocusContext() {
     return;
   }
 
-  const dot = subject ? `<span class="dot" style="background:${subject.color}"></span>` : '';
-  const parts = [];
-  if (task) parts.push(`<b>${App.escapeHtml(task.title)}</b>`);
-  if (subject) parts.push(App.escapeHtml(subject.name));
-
   box.hidden = false;
-  box.innerHTML = `<span class="timer-context__icon">🎯</span> ${dot}<span>Focusing on ${parts.join(' · ')}</span>`;
+  const parts = [];
+
+  if (task) {
+    const investedMin = Store.getTaskStudyMinutes(task.id);
+    let taskMeta = `<b>${App.escapeHtml(task.title)}</b>`;
+    if (task.estimatedMinutes) {
+      taskMeta += ` <span class="timer-context__badge">⏱️ ${investedMin}m focused / ${task.estimatedMinutes}m est.</span>`;
+    } else if (investedMin > 0) {
+      taskMeta += ` <span class="timer-context__badge">⏱️ ${investedMin}m focused</span>`;
+    }
+    parts.push(taskMeta);
+  }
+
+  if (subject) {
+    const weeklyMin = Store.getSubjectWeeklyMinutes(subject.id);
+    let subjMeta = `<span class="dot" style="background:${subject.color}"></span><span>${App.escapeHtml(subject.name)}</span>`;
+    if (weeklyMin > 0) {
+      subjMeta += ` <span class="timer-context__badge text-muted">(${Dates.formatDuration(weeklyMin)} this week)</span>`;
+    }
+    parts.push(subjMeta);
+  }
+
+  box.innerHTML = `<span class="timer-context__icon">🎯</span> <div class="timer-context__info flex wrap gap-2 align-center">${parts.join(' <span class="text-muted">·</span> ')}</div>`;
+}
+
+/* Update Session Start Preview Banner */
+function updateStartPreview() {
+  const banner = App.qs('#timerPreviewBanner');
+  if (!banner) return;
+
+  const durationMin = Math.round(state.totalSeconds / 60);
+  const subject = Store.getSubject(App.qs('#timerSubject')?.value);
+  const task = Store.getTask(App.qs('#timerTask')?.value);
+
+  if (state.mode === 'pomodoro') {
+    if (task && subject) {
+      banner.innerHTML = `Planned: <b>${durationMin}m Focus</b> on <i>"${App.escapeHtml(task.title)}"</i> (${App.escapeHtml(subject.name)})`;
+    } else if (task) {
+      banner.innerHTML = `Planned: <b>${durationMin}m Focus</b> on <i>"${App.escapeHtml(task.title)}"</i>`;
+    } else if (subject) {
+      banner.innerHTML = `Planned: <b>${durationMin}m Focus</b> on <b>${App.escapeHtml(subject.name)}</b>`;
+    } else {
+      banner.innerHTML = `Planned: <b>${durationMin}m General Focus Session</b>`;
+    }
+  } else if (state.mode === 'shortBreak') {
+    banner.innerHTML = `Planned: <b>${durationMin}m Short Break ☕</b>`;
+  } else if (state.mode === 'longBreak') {
+    banner.innerHTML = `Planned: <b>${durationMin}m Long Break 🌿</b>`;
+  }
 }
 
 /* If launched from a task "Start Focus" button, begin the session right away. */
@@ -152,6 +289,10 @@ function setMode(mode) {
     btn.classList.toggle('active', btn.dataset.mode === mode);
   });
 
+  // Hide paused badge on mode change
+  const pausedBadge = App.qs('#timerPausedBadge');
+  if (pausedBadge) pausedBadge.style.display = 'none';
+
   // Update labels
   const labels = {
     pomodoro: 'Ready to Focus',
@@ -164,6 +305,7 @@ function setMode(mode) {
   App.qs('#timerToggleText').textContent = mode === 'pomodoro' ? 'Start Focus' : 'Start Break';
 
   updateDisplay();
+  updateStartPreview();
 }
 
 /* ==========================================================================
@@ -202,6 +344,9 @@ function startTimer() {
   state.isCompleting = false;
   state.endTime = Date.now() + state.remainingSeconds * 1000;
 
+  const pausedBadge = App.qs('#timerPausedBadge');
+  if (pausedBadge) pausedBadge.style.display = 'none';
+
   App.qs('#timerToggleBtn').classList.add('btn-running');
   App.qs('#timerToggleText').textContent = 'Pause';
   App.qs('#timerPlayIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
@@ -209,8 +354,7 @@ function startTimer() {
   state.intervalId = setInterval(tick, 250);
 }
 
-/* One countdown step — derives remaining time from endTime (drift/throttle
-   safe) rather than counting interval fires. */
+/* One countdown step — derives remaining time from endTime (drift/throttle safe) */
 function tick() {
   const remaining = Math.max(0, Math.ceil((state.endTime - Date.now()) / 1000));
   state.remainingSeconds = remaining;
@@ -228,19 +372,27 @@ function pauseTimer() {
   App.qs('#timerToggleBtn').classList.remove('btn-running');
   App.qs('#timerToggleText').textContent = state.mode === 'pomodoro' ? 'Resume Focus' : 'Resume Break';
   App.qs('#timerPlayIcon').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+
+  const pausedBadge = App.qs('#timerPausedBadge');
+  if (pausedBadge && state.remainingSeconds < state.totalSeconds) {
+    pausedBadge.style.display = 'inline-block';
+  }
+
   document.title = 'StudyFlow — Focus Timer';
 }
 
 function resetTimer() {
   pauseTimer();
   state.remainingSeconds = state.totalSeconds;
+  const pausedBadge = App.qs('#timerPausedBadge');
+  if (pausedBadge) pausedBadge.style.display = 'none';
+
   App.qs('#timerToggleText').textContent = state.mode === 'pomodoro' ? 'Start Focus' : 'Start Break';
   updateDisplay();
 }
 
+/* Session Completion Logic — Exactly-once logging */
 function completeTimer() {
-  // Guard: the interval is cleared in pauseTimer(), but this protects against
-  // any path that could invoke completion twice for the same session.
   if (state.isCompleting) return;
   state.isCompleting = true;
 
@@ -250,8 +402,8 @@ function completeTimer() {
   const durationMin = Math.round(state.totalSeconds / 60);
 
   if (state.mode === 'pomodoro') {
-    const subjectId = App.qs('#timerSubject').value;
-    const taskId = App.qs('#timerTask').value;
+    const subjectId = App.qs('#timerSubject').value || null;
+    const taskId = App.qs('#timerTask').value || null;
 
     Store.saveSession({
       type: 'focus',
@@ -267,11 +419,18 @@ function completeTimer() {
         : `Focus session complete (+${durationMin}m)! Great job! 🎉`,
       'success'
     );
-    renderTodaySessions();
 
-    setMode('shortBreak');
-    // Auto-start the break if the user enabled it in Settings.
-    if (Store.getSettings().pomodoro.autoBreak) startTimer();
+    renderOverview();
+    renderTodaySessions();
+    renderFocusContext();
+
+    const autoBreak = Store.getSettings().pomodoro.autoBreak;
+    if (autoBreak) {
+      setMode('shortBreak');
+      startTimer();
+    } else {
+      openSessionCompleteModal(durationMin, subjectId, taskId);
+    }
   } else {
     App.toast('Break completed! Ready for the next focus session?', 'info');
     setMode('pomodoro');
@@ -279,7 +438,110 @@ function completeTimer() {
 }
 
 /* ==========================================================================
-   Controls Binding
+   Session Completion Modal
+   ========================================================================== */
+function openSessionCompleteModal(durationMin, subjectId, taskId) {
+  const modal = App.qs('#sessionCompleteModal');
+  if (!modal) return;
+
+  const subject = Store.getSubject(subjectId);
+  const task = Store.getTask(taskId);
+  const settings = Store.getSettings();
+  const pomo = settings.pomodoro;
+  const breakMin = pomo.shortBreak || 5;
+
+  const breakMinSpan = App.qs('#modalBreakMinutes');
+  if (breakMinSpan) breakMinSpan.textContent = breakMin;
+
+  const summaryEl = App.qs('#sessionCompleteSummary');
+  if (summaryEl) {
+    let focusDetail = 'deep focus';
+    if (task && subject) {
+      focusDetail = `focus on <b>${App.escapeHtml(task.title)}</b> (${App.escapeHtml(subject.name)})`;
+    } else if (task) {
+      focusDetail = `focus on <b>${App.escapeHtml(task.title)}</b>`;
+    } else if (subject) {
+      focusDetail = `focus on <b>${App.escapeHtml(subject.name)}</b>`;
+    }
+    summaryEl.innerHTML = `You completed <b>+${durationMin} minutes</b> of ${focusDetail}! Excellent progress.`;
+  }
+
+  // Updated stats
+  const study = Store.getStudyStats();
+  const dailyGoal = pomo.dailyGoal != null ? pomo.dailyGoal : 120;
+  const statsBox = App.qs('#sessionCompleteStats');
+  if (statsBox) {
+    let goalStatusHtml = '';
+    if (dailyGoal > 0) {
+      const pct = Math.min(100, Math.round((study.todayMinutes / dailyGoal) * 100));
+      goalStatusHtml = `
+        <div class="session-modal-stat-card">
+          <small class="text-muted">Goal Progress</small>
+          <b>${pct}%</b>
+          <div class="timer-progress-track mt-1" style="height:4px">
+            <div class="timer-progress-fill" style="width:${pct}%"></div>
+          </div>
+        </div>`;
+    }
+    statsBox.innerHTML = `
+      <div class="session-modal-stats-grid">
+        <div class="session-modal-stat-card">
+          <small class="text-muted">Today's Focus</small>
+          <b>${Dates.formatDuration(study.todayMinutes)}</b>
+        </div>
+        <div class="session-modal-stat-card">
+          <small class="text-muted">Study Streak</small>
+          <b>${study.streakDays} ${study.streakDays === 1 ? 'day' : 'days'}</b>
+        </div>
+        ${goalStatusHtml}
+      </div>`;
+  }
+
+  modal.hidden = false;
+  modal.classList.add('active');
+
+  // Focus trap / initial focus on Break button
+  const breakBtn = App.qs('#modalStartBreakBtn');
+  if (breakBtn) breakBtn.focus();
+}
+
+function closeSessionCompleteModal() {
+  const modal = App.qs('#sessionCompleteModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.classList.remove('active');
+}
+
+function bindModalActions() {
+  const modal = App.qs('#sessionCompleteModal');
+  if (!modal) return;
+
+  // Start break button
+  App.qs('#modalStartBreakBtn')?.addEventListener('click', () => {
+    closeSessionCompleteModal();
+    setMode('shortBreak');
+    startTimer();
+  });
+
+  // Start another focus button
+  App.qs('#modalStartFocusBtn')?.addEventListener('click', () => {
+    closeSessionCompleteModal();
+    setMode('pomodoro');
+    resetTimer();
+    startTimer();
+  });
+
+  // Done button / backdrop
+  App.qsa('[data-modal-close]', modal).forEach(btn => {
+    btn.addEventListener('click', () => {
+      closeSessionCompleteModal();
+      setMode('shortBreak');
+    });
+  });
+}
+
+/* ==========================================================================
+   Controls Binding & Keyboard Accessibility
    ========================================================================== */
 function bindTimerControls() {
   // Mode Tabs
@@ -311,6 +573,30 @@ function bindTimerControls() {
       setMode('pomodoro');
     }
   });
+
+  // Keyboard accessibility
+  window.addEventListener('keydown', e => {
+    const modal = App.qs('#sessionCompleteModal');
+    if (modal && !modal.hidden) {
+      if (e.key === 'Escape') {
+        closeSessionCompleteModal();
+        setMode('shortBreak');
+      }
+      return;
+    }
+
+    const activeTag = document.activeElement?.tagName;
+    if (['INPUT', 'SELECT', 'TEXTAREA'].includes(activeTag)) return;
+
+    if (e.code === 'Space') {
+      e.preventDefault();
+      if (state.isRunning) {
+        pauseTimer();
+      } else {
+        startTimer();
+      }
+    }
+  });
 }
 
 /* ==========================================================================
@@ -319,10 +605,7 @@ function bindTimerControls() {
 function renderTodaySessions() {
   const today = Dates.todayISO();
   const sessions = Store.getSessions()
-    // Convert UTC timestamps to the user's local study day. Keep this local
-    // to the timer UI so it remains compatible with an older cached data
-    // layer during a normal static-site update.
-    .filter(s => Dates.toISO(new Date(s.completedAt)) === today)
+    .filter(s => s.type === 'focus' && Dates.toISO(new Date(s.completedAt)) === today)
     .reverse();
 
   const totalMin = sessions.reduce((acc, s) => acc + (Number(s.durationMinutes) || 0), 0);
@@ -373,6 +656,8 @@ function renderTodaySessions() {
       const sId = btn.dataset.deleteSession;
       Store.deleteSession(sId);
       renderTodaySessions();
+      renderOverview();
+      renderFocusContext();
       App.toast('Session log removed', 'info');
     });
   });
