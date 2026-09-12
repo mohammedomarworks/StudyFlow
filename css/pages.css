@@ -1480,3 +1480,303 @@
 #overallTiles.stats-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+
+/* ==========================================================================
+   PROGRESS & ANALYTICS PAGE (PHASE 5)
+   ========================================================================== */
+.analytics-range-bar {
+  display: inline-flex;
+  gap: 4px;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.range-btn {
+  background: transparent;
+  border: none;
+  padding: 6px 14px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.range-btn:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+
+.range-btn.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.analytics-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.analytics-metric-card {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border-radius: var(--radius-md);
+  min-height: 120px;
+}
+
+.analytics-metric-card .metric-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+}
+
+.analytics-metric-card .metric-label {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.analytics-metric-card .metric-value {
+  font-size: var(--fs-2xl);
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.1;
+  margin-bottom: 4px;
+}
+
+.analytics-metric-card .metric-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+
+/* Study Time Trend Chart */
+.analytics-chart-wrap {
+  width: 100%;
+}
+
+.trend-chart-container {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+
+.trend-chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  min-height: 220px;
+  padding: var(--space-4) var(--space-2) var(--space-2);
+  justify-content: space-between;
+}
+
+.chart-col {
+  flex: 1;
+  min-width: 28px;
+  max-width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  outline: none;
+  border-radius: var(--radius-sm);
+  padding: 4px 2px;
+  transition: background var(--transition);
+}
+
+.chart-col:hover,
+.chart-col:focus-visible {
+  background: var(--surface-2);
+}
+
+.chart-val {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  height: 16px;
+  white-space: nowrap;
+}
+
+.chart-col:hover .chart-val,
+.chart-col:focus-visible .chart-val {
+  color: var(--primary);
+}
+
+.chart-bar-track {
+  width: 14px;
+  height: 140px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  position: relative;
+  border: 1px solid var(--border);
+}
+
+.chart-bar-fill {
+  width: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #a855f7, var(--primary));
+  transition: height 0.4s ease;
+}
+
+.chart-col.is-today .chart-bar-fill {
+  background: linear-gradient(180deg, #38bdf8, #0284c7);
+}
+
+.chart-lbl {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.chart-col.is-today .chart-lbl {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+/* Day-of-Week Distribution mini-bars */
+.dow-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: var(--space-2);
+  min-height: 140px;
+  align-items: flex-end;
+}
+
+.dow-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.dow-val {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dow-track {
+  width: 12px;
+  height: 90px;
+  background: var(--surface-2);
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.dow-fill {
+  width: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(180deg, #f59e0b, #d97706);
+  transition: height 0.4s ease;
+}
+
+.dow-col.is-peak .dow-fill {
+  background: linear-gradient(180deg, var(--primary), #a855f7);
+}
+
+.dow-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.dow-col.is-peak .dow-label {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.pattern-highlight-box {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+/* Subject Study Distribution */
+.subject-dist-row {
+  margin-bottom: var(--space-3);
+}
+
+.subject-dist-name {
+  color: var(--text);
+  font-size: var(--fs-sm);
+  text-decoration: none;
+}
+
+.subject-dist-name:hover {
+  text-decoration: underline;
+}
+
+/* Multi-segmented completion bar */
+.segmented-progress-track {
+  height: 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  display: flex;
+  overflow: hidden;
+  gap: 2px;
+}
+
+.segmented-fill {
+  height: 100%;
+  transition: width 0.4s ease;
+}
+
+.bg-success { background: var(--success); }
+.bg-primary { background: var(--primary); }
+.bg-danger  { background: var(--danger); }
+
+/* Productivity Insights */
+.insight-card-item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  margin-bottom: var(--space-3);
+}
+
+.insight-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.insight-title {
+  font-size: var(--fs-sm);
+  color: var(--text);
+  margin-bottom: 2px;
+}
+
+.insight-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.insight-desc b {
+  color: var(--text);
+}

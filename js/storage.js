@@ -449,14 +449,42 @@ const Store = {
       checkDate.setDate(checkDate.getDate() - 1);
     }
 
+    // Calculate longest streak
+    const sortedDays = Array.from(uniqueDays).sort();
+    let longestStreak = 0;
+    let currentRun = 0;
+    let prevDate = null;
+    for (const dStr of sortedDays) {
+      const d = Dates.parse(dStr);
+      if (!d) continue;
+      if (!prevDate) {
+        currentRun = 1;
+      } else {
+        const diffDays = Math.round((d - prevDate) / 86400000);
+        if (diffDays === 1) {
+          currentRun++;
+        } else if (diffDays > 1) {
+          currentRun = 1;
+        }
+      }
+      if (currentRun > longestStreak) longestStreak = currentRun;
+      prevDate = d;
+    }
+
     return {
       totalMinutes,
       totalHours: Number((totalMinutes / 60).toFixed(1)),
       todayMinutes,
       totalSessions: sessions.length,
       todaySessionsCount: todaySessions.length,
-      streakDays: streak
+      streakDays: streak,
+      longestStreak
     };
+  },
+
+  /** Get all-time longest continuous study streak in days */
+  getLongestStreak() {
+    return this.getStudyStats().longestStreak;
   },
 
   /** Aggregate focus metrics for the current week (Sun–Sat) */

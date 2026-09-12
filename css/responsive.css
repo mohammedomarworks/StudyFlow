@@ -10,6 +10,7 @@
 @media (max-width: 1024px) {
   .dash-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .analytics-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .timer-view-grid { grid-template-columns: 1fr; }
 }
 
@@ -65,6 +66,7 @@
 
   .timer-session-pickers { grid-template-columns: 1fr; }
   .timer-overview-grid { grid-template-columns: 1fr; }
+  .analytics-range-bar { width: 100%; justify-content: center; }
   #overallTiles.stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   /* Calendar summary strip at tablet */
@@ -127,6 +129,18 @@
   .timer-circle-wrap svg { max-width: min(250px, 72vw); height: auto; }
   .timer-controls { flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
   .timer-controls .btn { flex: 1; min-width: 90px; }
+
+  /* Analytics mobile rules */
+  .analytics-summary-grid { grid-template-columns: 1fr; }
+  .analytics-range-bar { border-radius: var(--radius-md); padding: 3px; }
+  .range-btn { flex: 1 1 calc(33.333% - 4px); text-align: center; padding: 6px 8px; font-size: 0.72rem; }
+  .trend-chart-bars { min-height: 190px; }
+  .chart-bar-track { height: 110px; width: 10px; }
+  .chart-val { font-size: 0.62rem; }
+  .chart-lbl { font-size: 0.65rem; }
+  .dow-track { height: 75px; width: 10px; }
+  .dow-val { font-size: 0.6rem; }
+  .dow-label { font-size: 0.65rem; }
 }
 
 /* ---- <= 375px : small phones -------------------------------------------- */
@@ -136,6 +150,8 @@
   .quick-action-btn svg { width: 15px; height: 15px; }
   .toolbar .select { width: 100%; min-width: 100%; }
   .timer-circle-wrap svg { max-width: min(210px, 68vw); }
+  .trend-chart-bars { min-width: 320px; }
+  .range-btn { flex: 1 1 calc(50% - 4px); }
 
   /* Calendar small phone adjustments */
   .cal-card { padding: var(--space-2); }
