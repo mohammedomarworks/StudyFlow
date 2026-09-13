@@ -1,58 +1,52 @@
 # 📚 StudyFlow
 
 <p align="center">
-
-A modern, responsive, distraction-free study planner built with **HTML, CSS and JavaScript**.
-
-Organize subjects, manage tasks, track progress, write notes, and stay productive—all in one place.
-
+  A modern, responsive, distraction-free student productivity and study planning system built with <b>pure HTML, CSS, and vanilla JavaScript</b>.
+  <br />
+  Organize subjects, manage tasks with time estimates, schedule via interactive calendar, run Pomodoro focus sessions, capture notes, and track your momentum—<b>100% locally and privately in your browser</b>.
 </p>
 
 <p align="center">
-
-<a href="https://mohammedomarworks.github.io/StudyFlow/">
-<img src="https://img.shields.io/badge/Live_Demo-Visit_Project-8A2BE2?style=for-the-badge">
-</a>
-
-<a href="LICENSE">
-<img src="https://img.shields.io/badge/License-MIT-success?style=for-the-badge">
-</a>
-
-<img src="https://img.shields.io/badge/HTML-5-orange?style=for-the-badge&logo=html5">
-
-<img src="https://img.shields.io/badge/CSS-3-blue?style=for-the-badge&logo=css3">
-
-<img src="https://img.shields.io/badge/JavaScript-ES6-yellow?style=for-the-badge&logo=javascript">
-
+  <a href="https://mohammedomarworks.github.io/StudyFlow/">
+    <img src="https://img.shields.io/badge/Live_Demo-Visit_StudyFlow-8B5CF6?style=for-the-badge" alt="Live Demo">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-success?style=for-the-badge" alt="License MIT">
+  </a>
+  <img src="https://img.shields.io/badge/Version-v2.0.0-blueviolet?style=for-the-badge" alt="Version 2.0.0">
+  <img src="https://img.shields.io/badge/Dependencies-Zero-emerald?style=for-the-badge" alt="Zero Dependencies">
 </p>
 
 ---
-## ✨ Features
 
-- 📋 Create, edit and delete study tasks
-- 📚 Organize subjects with color coding
-- 📅 Interactive academic calendar
-- 📝 Dedicated notes management
-- 📈 Visual study progress tracking
-- 🌙 Dark mode interface
-- 💾 Automatic Local Storage persistence
-- 🔍 Search and filter functionality
-- 📱 Fully responsive design
-- ⚡ Fast and lightweight (No frameworks)
+## ✨ Features Overview
+
+StudyFlow provides an integrated suite of student productivity tools designed to eliminate study friction:
+
+- **🏠 Dynamic Dashboard**: Instant pulse on today's priorities, urgent tasks, upcoming 7-day deadlines, exam countdowns, subject completion bars, and quick capture modals.
+- **📋 Enhanced Tasks**: Comprehensive task management with functional categories (*Assignments, Reading, Revision, Practice, Project, Other*), priority tiers (*High, Medium, Low*), time estimates, due dates, multi-criteria sorting, quick-completion toggles, and safe deletion confirmation.
+- **📚 Subjects Management**: Color-coded academic subjects with syllabus codes, target exams, associated tasks, and progress tracking.
+- **📅 Interactive Study Calendar**: Month-view academic schedule with color-coded exam markers, task due indicators, completion badges, and interactive day detail inspection drawer.
+- **⏱️ Focus & Pomodoro Timer**: Dedicated deep work timer with Pomodoro (25m), Short Break (5m), and Long Break (15m) modes, custom Web Audio synthesis chimes, subject linking, and auto-logged focus history.
+- **📊 Progress & Analytics**: Visual completion ratios, priority breakdowns, focus velocity streaks, habit trends, and chronological activity feed.
+- **📝 Notes & Knowledge Base**: Markdown-enabled study notes, subject linking, favorite pinning, and rapid search filtering.
+- **⚙️ Settings & Data Control**: In-memory storage diagnostics, safe pre-import validation, side-by-side JSON preview comparison modal, customizable daily focus goals, app preferences (default sorting, confirm delete, reduced motion), non-reseeding reset, and exportable JSON backups.
+- **🔍 Global Search (`Cmd+K` / `Ctrl+K`)**: Fast universal command palette searching across tasks, subjects, and notes with instant keyboard navigation.
+- **🌓 Adaptive Theme**: Seamless Dark, Light, and System theme synchronization with persistent preferences and zero flash on load.
+- **🔒 100% Local-First & Private**: Zero cloud sync, zero telemetry, zero accounts, zero external database servers—all data resides strictly in browser `localStorage`.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Technology | Purpose |
-|------------|----------|
-| HTML5 | Page Structure |
-| CSS3 | Styling & Responsive Layout |
-| JavaScript (ES6) | Application Logic |
-| Local Storage API | Data Persistence |
-| REST API | Quotes / External Data |
-| Git | Version Control |
-| GitHub Pages | Deployment |
+| Technology | Implementation & Purpose |
+|------------|---------------------------|
+| **HTML5** | Semantic markup across 9 distinct pages with accessibility attributes (`aria-*`, landmark roles) |
+| **CSS3** | Modern custom properties (design tokens), responsive CSS Grid, Flexbox, and fluid typography |
+| **Vanilla JavaScript (ES6+)** | Modular application architecture, event delegation, and reactive DOM rendering without frameworks |
+| **Web Storage API** | Browser `localStorage` engine with schema migrations, validation, and diagnostics |
+| **Web Audio API** | Synthesized chime frequencies for focus timer alerts without external audio assets |
+| **Zero Runtime Dependencies** | No React, Vue, npm packages, or bundlers required—runs natively in any modern browser |
 
 ---
 
@@ -60,52 +54,99 @@ Organize subjects, manage tasks, track progress, write notes, and stay productiv
 
 ```text
 StudyFlow/
-│
-├── assets/
-│   └── screenshots/
-│
-├── css/
-│   ├── base.css
-│   ├── components.css
-│   ├── pages.css
-│   ├── responsive.css
-│   └── variables.css
-│
-├── js/
-│   ├── app.js
-│   ├── dashboard.js
-│   ├── tasks.js
-│   ├── subjects.js
-│   ├── calendar.js
-│   ├── notes.js
-│   ├── progress.js
-│   ├── about.js
-│   └── storage.js
-│
+├── index.html                   # Main Dashboard
 ├── pages/
-│   ├── tasks.html
-│   ├── subjects.html
-│   ├── calendar.html
-│   ├── notes.html
-│   ├── progress.html
-│   └── about.html
-│
-├── index.html
-├── README.md
-└── LICENSE
+│   ├── tasks.html               # Task Management
+│   ├── subjects.html            # Subject Directory & Syllabi
+│   ├── calendar.html            # Academic Calendar & Day Inspector
+│   ├── timer.html               # Focus & Pomodoro Timer
+│   ├── progress.html            # Analytics, Velocity & Activity Log
+│   ├── notes.html               # Notes & Knowledge Management
+│   ├── settings.html            # Preferences, Backup & Diagnostics
+│   └── about.html               # Architecture, Live Stats & Badges
+├── css/
+│   ├── variables.css            # Design tokens, color palettes & spacing
+│   ├── base.css                 # Reset, typography, utility classes & reduced-motion
+│   ├── components.css           # Buttons, cards, modals, badges & form controls
+│   ├── pages.css                # Page-specific layout rules & widget grids
+│   └── responsive.css           # Tablet and mobile viewport breakpoints
+├── js/
+│   ├── storage.js               # Store API, LocalStorage engine, validation & diagnostics
+│   ├── app.js                   # Navigation, theme toggle, Cmd+K modal & shared helpers
+│   ├── dashboard.js             # Dashboard widgets, urgent queues & exam countdowns
+│   ├── tasks.js                 # Task filtering, sorting, CRUD & inline completion
+│   ├── subjects.js              # Subject management & exam scheduling
+│   ├── calendar.js              # Month rendering, day inspection & event markers
+│   ├── timer.js                 # Pomodoro state machine & Web Audio chimes
+│   ├── progress.js              # Completion metrics, chart calculations & streak logic
+│   ├── notes.js                 # Note editor, markdown renderer, pinning & subject filter
+│   ├── settings.js              # Settings controller, import preview & diagnostics
+│   └── about.js                 # Live database snapshot statistics
+├── assets/
+│   └── screenshots/             # Interface preview screenshots
+├── DESIGN_SYSTEM.md             # Color tokens, typography, and component specifications
+├── CHANGELOG.md                 # Project version history and release notes
+├── LICENSE                      # MIT Open Source License
+└── README.md                    # Project documentation
 ```
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+| Shortcut | Scope | Action |
+|----------|-------|--------|
+| <kbd>Cmd</kbd> + <kbd>K</kbd> / <kbd>Ctrl</kbd> + <kbd>K</kbd> | Global | Open Global Search command palette |
+| <kbd>Esc</kbd> | Global | Dismiss active modal, search palette, or day drawer |
+| <kbd>↑</kbd> / <kbd>↓</kbd> | Search / Lists | Navigate search results and interactive lists |
+| <kbd>Enter</kbd> | Search / Modals | Jump to selected search result or submit active form |
+
+---
+
+## 💾 Local-First Storage & Data Safety
+
+StudyFlow is built entirely around an offline, privacy-first local storage architecture:
+
+- **Namespaced Storage Keys**:
+  - `sp_subjects` — Registered courses, syllabus codes, and exam dates
+  - `sp_tasks` — Tasks with categories, priorities, due dates, and time estimates
+  - `sp_notes` — Study notes with markdown content, pinning, and subject links
+  - `sp_sessions` — Completed focus sessions and deep work history
+  - `sp_activity` — Chronological activity feed
+  - `sp_settings` — Theme preferences, daily focus goal targets, and app options
+  - `sp_seeded_v1` — First-run sample data flag
+- **JSON Backup & Restore**: Export a timestamped, formatted JSON backup of your entire workspace at any time.
+- **Pre-Import Validation & Preview**: Before importing, the file is validated non-destructively for JSON and schema structure, presenting a side-by-side comparison modal with incoming vs. current counts.
+- **Anti-Reseeding Guarantee**: Clearing data removes all user records while safely maintaining the seeded flag, ensuring an emptied workspace remains completely empty on page reload.
 
 ---
 
 ## 🚀 Getting Started
 
-Clone the repository:
+No build tools, compilation, or package managers are required.
+
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/mohammedomarworks/StudyFlow.git
+cd StudyFlow
 ```
 
-Open the project folder and launch `index.html` with Live Server or any modern browser.
+### 2. Launch in Browser
+
+Choose any static file server:
+
+**Option A: Python 3**
+```bash
+python3 -m http.server 8000
+```
+Then open `http://localhost:8000` in your browser.
+
+**Option B: VS Code Live Server**
+Right-click `index.html` and select **"Open with Live Server"**.
+
+**Option C: Direct Browser Opening**
+Double-click `index.html` to open directly in Google Chrome, Safari, Firefox, or Edge.
 
 ---
 
@@ -186,39 +227,32 @@ Learn more about StudyFlow and its purpose as a student productivity application
 
 ---
 
-## 🚀 Roadmap
+## 🚀 Roadmap & Release Milestones
 
-### Version 1.0.0 ✅
-- [x] Responsive dashboard
-- [x] Task management
-- [x] Subject management
-- [x] Calendar
-- [x] Notes
-- [x] Progress tracking
-- [x] Dark mode
-- [x] Local Storage support
-- [x] GitHub Pages deployment
+### Version 1.0.0 — Foundation ✅
+- [x] Semantic HTML page layouts
+- [x] Basic task and subject management
+- [x] Basic monthly calendar
+- [x] Simple notes and study progress
+- [x] Initial dark mode theme
+- [x] Basic LocalStorage persistence
 
-### Version 1.1.0
-- [ ] UI/UX improvements
-- [ ] Better animations
-- [ ] Improved mobile experience
+### Version 2.0.0 — Production Release ✅
+- [x] **Full UI/UX Redesign**: High-contrast modern dark & light themes, Plus Jakarta Sans typography, and accessible design tokens.
+- [x] **Urgency-Driven Dashboard**: Today's priorities, 7-day deadlines, exam countdowns, subject velocity meters, and quick task modal.
+- [x] **Advanced Task Workflow**: Categories (*Assignments, Reading, Revision, etc.*), time estimates, priorities, multi-criteria sorting, inline completion, and delete safeguards.
+- [x] **Interactive Academic Calendar**: Color-coded exam markers, task indicators, day drawer inspection, and inline task toggles.
+- [x] **Deep Work Pomodoro Timer**: Focus (25m), Short Break (5m), Long Break (15m), Web Audio chimes, and automatic subject-linked session logging.
+- [x] **Progress & Velocity Analytics**: Subject completion ratios, daily study streaks, focus analytics, and chronological activity feed.
+- [x] **Notes & Knowledge Base**: Markdown editor, note pinning, subject filtering, and fast keyword search.
+- [x] **Settings & Data Protection**: Pre-import validation, side-by-side JSON comparison modal, in-memory diagnostics, daily focus goal targets, and anti-reseeding workspace reset.
+- [x] **Global Command Palette (`Cmd+K`)**: Unified cross-entity search with keyboard navigation.
+- [x] **Accessibility & Performance**: 100% clean navigation links, safe HTML escaping, reduced-motion preferences, and zero runtime dependencies.
 
-### Version 1.2.0
-- [ ] Drag & Drop task management
-- [ ] Advanced search & filters
-- [ ] Keyboard shortcuts
-
-### Version 1.5.0
-- [ ] Pomodoro Timer
-- [ ] Habit Tracker
-- [ ] Study session analytics
-
-### Version 2.0.0
-- [ ] User authentication
-- [ ] Cloud synchronization
-- [ ] Database integration
-- [ ] Real-time notifications
+### Future Explorations
+- [ ] iCalendar / `.ics` export for study schedule integration
+- [ ] Tabular CSV export for tasks and session logs
+- [ ] Flashcard study mode linked to subject notes
 
 ---
 

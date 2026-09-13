@@ -714,7 +714,7 @@ function renderProductivityInsights(snapshot, bounds) {
     <div class="insight-card-item mb-3">
       <div class="insight-icon">${item.icon}</div>
       <div class="insight-content">
-        <div class="insight-title font-bold">${item.title}</div>
+        <div class="insight-title font-bold">${App.escapeHtml(item.title)}</div>
         <div class="insight-desc text-muted" style="font-size:var(--fs-sm); line-height:1.4">${item.desc}</div>
       </div>
     </div>`).join('');

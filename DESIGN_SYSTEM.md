@@ -27,91 +27,57 @@ A student should be able to understand what needs attention within a few seconds
 
 ## 2. Visual Style
 
-StudyFlow uses a dark productivity-focused interface with a purple accent system.
+StudyFlow uses a modern, productivity-focused interface with a signature purple accent system, fully supporting Light, Dark, and System theme modes.
 
 ### Main Characteristics
 
-- Dark background
-- Purple primary accent
-- Soft card surfaces
-- Rounded corners
-- Subtle borders
-- Soft shadows and glows
-- Clear typography hierarchy
-- Minimal visual clutter
-- Consistent spacing
+- Adaptive theme (Dark, Light, System) via CSS custom properties
+- StudyFlow purple primary accent (`#8B5CF6`)
+- Soft card surfaces with subtle translucent borders
+- Rounded corners (`8px` to `16px`)
+- Soft shadows and accent glows
+- Strict typographic hierarchy (`Plus Jakarta Sans` with monospace data badges)
+- Minimal visual clutter and generous breathing room
+- Consistent 4px-based spacing scale
+- Reduced motion support (`prefers-reduced-motion` and user toggle)
 
-The design should avoid excessive decoration and unnecessary animations.
+The design avoids excessive decoration and unnecessary animations, keeping focus on academic execution.
 
 ---
 
-## 3. Color System
+## 3. Color & Theme System
 
-### Background
+StudyFlow implements design tokens through CSS custom variables declared in `css/variables.css`.
 
-Primary background:
+### Theme Palettes
 
-```text
-#0F0D1C
+| Token | Dark Theme (Default) | Light Theme |
+|---|---|---|
+| `--bg` | `#0B0D13` | `#F8F9FD` |
+| `--surface` | `#131620` | `#FFFFFF` |
+| `--surface-2` | `#1A1D2B` | `#F0F2F9` |
+| `--surface-3` | `#222638` | `#E5E8F3` |
+| `--border` | `rgba(255, 255, 255, 0.08)` | `rgba(0, 0, 0, 0.08)` |
+| `--text` | `#F3F4F6` | `#111827` |
+| `--text-muted` | `#9CA3AF` | `#6B7280` |
 
-Secondary background:
+### Accent Colors
 
-#15122A
+- **Primary Purple:** `#8B5CF6` (`--primary`)
+- **Hover Purple:** `#7C3AED` (`--primary-hover`)
+- **Purple Glow:** `rgba(139, 92, 246, 0.25)`
 
-Card background:
+### Status & Priority Colors
 
-#1B1833
+- **Success / Low Priority / Completed:** `#10B981` (`--green`)
+- **Warning / Medium Priority / Due Soon:** `#F59E0B` (`--orange` / `--amber`)
+- **Danger / High Priority / Overdue:** `#EF4444` (`--red`)
+- **Info / Study Sessions:** `#3B82F6` (`--blue`)
+- **Notes / Accents:** `#EC4899` (`--pink`)
 
-Elevated card:
+---
 
-#211D3D
-
-Primary Accent
-
-StudyFlow purple:
-
-#8B5CF6
-
-Bright purple:
-
-#A855F7
-
-Purple glow:
-
-rgba(139, 92, 246, 0.25)
-Text
-
-Primary text:
-
-#F5F3FF
-
-Secondary text:
-
-#A8A3BD
-
-Muted text:
-
-#716C86
-
-Status Colors
-
-Success:
-
-#22C55E
-
-Warning:
-
-#F59E0B
-
-Danger:
-
-#EF4444
-
-Information:
-
-#3B82F6
-
-4. Typography
+## 4. Typography
 
 StudyFlow should use a clean modern sans-serif font.
 
@@ -343,3 +309,26 @@ The final version of StudyFlow should feel like a real student productivity prod
 The interface should be:
 
 Simple enough to use every day, but polished enough to feel like a professional application.
+
+---
+
+## 17. Standardized Product Terminology
+
+To maintain conceptual clarity across pages and components, use these exact terms:
+
+- **Subject**: An academic course or field of study (attributes: title, code, color, exam date).
+- **Task**: An actionable academic deliverable (attributes: title, subject, category, priority, due date, estimated minutes, completion state).
+- **Category**: A functional type of task (`Assignments`, `Reading`, `Revision`, `Practice`, `Project`, `Other`).
+- **Priority**: Urgency/importance tier (`High`, `Medium`, `Low`).
+- **Focus Session**: A timed study work block (`Focus`, `Short Break`, `Long Break`) linked to an optional subject.
+- **Daily Focus Goal**: The student's target study duration per day (default 120 minutes), configurable in Settings.
+- **Note**: A markdown-enabled study document with optional pinning and subject association.
+- **Settings**: The application control center (App Preferences, Focus Goals, Diagnostics, Backup & Restore, About).
+
+---
+
+## 18. Accessibility & Motion Guidelines
+
+- **Interactive Targets**: All interactive elements (buttons, links, form toggles) must meet or exceed 44×44px hit areas on touch devices.
+- **Color Contrast**: Text must adhere to WCAG AA contrast standards against its respective background in both light and dark themes.
+- **Reduced Motion**: All animations and transitions respect `prefers-reduced-motion: reduce` and the explicit user toggle in Settings (`data-reduced-motion="true"` on `<html>`).

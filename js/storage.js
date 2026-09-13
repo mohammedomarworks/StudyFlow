@@ -759,7 +759,7 @@ const Store = {
     this.saveSettings({ lastExportAt: nowISO });
 
     const data = {
-      version: '1.3.0',
+      version: '2.0.0',
       exportedAt: nowISO,
       subjects: this.getSubjects(),
       tasks: this.getTasks(),
@@ -937,7 +937,7 @@ const Store = {
         activity: currentDiag.activityCount
       },
       normalizedData: {
-        version: data.version || '1.3.0',
+        version: data.version || '2.0.0',
         subjects: normalizedSubjects,
         tasks: normalizedTasks,
         notes: normalizedNotes,
