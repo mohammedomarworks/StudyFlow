@@ -76,6 +76,10 @@
   .notes-toolbar-wrap .toolbar { flex-direction: column; align-items: stretch; }
   .notes-filter-pills { width: 100%; justify-content: center; }
   .notes-filter-pills .btn { flex: 1; text-align: center; }
+
+  /* Settings at tablet */
+  .shortcuts-grid { grid-template-columns: 1fr; }
+  .diagnostics-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
@@ -92,6 +96,7 @@
   .stats-grid { grid-template-columns: 1fr; gap: var(--space-3); }
   #overallTiles.stats-grid { grid-template-columns: 1fr; }
   #focusAnalytics .stats-grid { grid-template-columns: 1fr !important; }
+  .diagnostics-grid { grid-template-columns: 1fr; }
 
   /* Calendar phone layouts */
   .cal-card { padding: var(--space-3); }

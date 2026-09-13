@@ -862,6 +862,166 @@ kbd, .kbd-badge {
 }
 
 /* ==========================================================================
+   SETTINGS ENHANCEMENTS (PHASE 7)
+   ========================================================================== */
+.goal-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.goal-preset-btn {
+  padding: 4px 12px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+.goal-preset-btn:hover {
+  background: var(--surface-3);
+  color: var(--text);
+  border-color: var(--border-strong);
+}
+.goal-preset-btn.active {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+  font-weight: 700;
+}
+
+/* Storage Diagnostics */
+.diagnostics-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.diagnostics-tile {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.diagnostics-num {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--primary);
+  line-height: 1.1;
+}
+.diagnostics-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.diagnostics-sub {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+}
+.diagnostics-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Import Preview Table */
+.import-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-3) 0 var(--space-4);
+  font-size: var(--fs-sm);
+}
+.import-preview-table th,
+.import-preview-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.import-preview-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.import-preview-table td:nth-child(2),
+.import-preview-table td:nth-child(3) {
+  text-align: right;
+  font-family: var(--font-mono, monospace);
+}
+.import-preview-table th:nth-child(2),
+.import-preview-table th:nth-child(3) {
+  text-align: right;
+}
+
+/* Keyboard Shortcuts Reference */
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+.shortcut-card {
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.shortcut-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.shortcut-keys {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.shortcut-keys kbd {
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--text);
+  box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+}
+.shortcut-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.shortcut-desc {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ==========================================================================
    TIMER / STUDY SESSION STYLES
    ========================================================================== */
 .timer-container {

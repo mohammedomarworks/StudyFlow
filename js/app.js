@@ -91,6 +91,53 @@ const App = {
     });
   },
 
+  /* ========================== MOTION =================================== */
+  getMotion() {
+    const settings = Store.getSettings();
+    return (settings.preferences && settings.preferences.motion) || 'system';
+  },
+
+  applyMotion(motionPref) {
+    const root = document.documentElement;
+    const pref = motionPref || this.getMotion();
+    let isReduced = false;
+
+    if (pref === 'reduce') {
+      isReduced = true;
+    } else if (pref === 'full') {
+      isReduced = false;
+    } else {
+      // 'system' — match device OS setting
+      try {
+        isReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      } catch {
+        isReduced = false;
+      }
+    }
+
+    if (isReduced) {
+      root.setAttribute('data-reduced-motion', 'reduce');
+    } else {
+      root.removeAttribute('data-reduced-motion');
+    }
+  },
+
+  initMotionListener() {
+    this.applyMotion();
+
+    // Watch OS motion preference changes if in system mode
+    try {
+      const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+      if (media && media.addEventListener) {
+        media.addEventListener('change', () => {
+          if (this.getMotion() === 'system') {
+            this.applyMotion('system');
+          }
+        });
+      }
+    } catch {}
+  },
+
   /* ========================== NAVBAR =================================== */
   initNavbar() {
     const page = document.body.dataset.page;
@@ -507,6 +554,7 @@ const App = {
   /* ========================= INIT ===================================== */
   init() {
     this.initThemeListener();
+    this.initMotionListener();
     this.initNavbar();
     this.initGlobalSearch();
 

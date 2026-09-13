@@ -435,16 +435,24 @@ function wireCards() {
         e.stopPropagation();
         const note = Store.getNote(id);
         if (!note) return;
-        App.confirm({
-          title: 'Delete note?',
-          message: `"${note.title}" will be permanently removed.`,
-          confirmText: 'Delete',
-          onConfirm: () => {
-            Store.deleteNote(id);
-            App.toast('Note deleted', 'info');
-            render();
-          }
-        });
+
+        const doDelete = () => {
+          Store.deleteNote(id);
+          App.toast('Note deleted', 'info');
+          render();
+        };
+
+        const confirmDelete = Store.getSettings().preferences?.confirmDelete !== false;
+        if (confirmDelete) {
+          App.confirm({
+            title: 'Delete note?',
+            message: `"${note.title}" will be permanently removed.`,
+            confirmText: 'Delete',
+            onConfirm: doDelete
+          });
+        } else {
+          doDelete();
+        }
       });
     }
   });
@@ -538,18 +546,25 @@ function bindModals() {
       const note = Store.getNote(view.activeDetailId);
       if (!note) return;
 
-      App.confirm({
-        title: 'Delete note?',
-        message: `"${note.title}" will be permanently removed.`,
-        confirmText: 'Delete',
-        onConfirm: () => {
-          Store.deleteNote(view.activeDetailId);
-          App.closeModal('#noteDetailModal');
-          view.activeDetailId = null;
-          App.toast('Note deleted', 'info');
-          render();
-        }
-      });
+      const doDelete = () => {
+        Store.deleteNote(view.activeDetailId);
+        App.closeModal('#noteDetailModal');
+        view.activeDetailId = null;
+        App.toast('Note deleted', 'info');
+        render();
+      };
+
+      const confirmDelete = Store.getSettings().preferences?.confirmDelete !== false;
+      if (confirmDelete) {
+        App.confirm({
+          title: 'Delete note?',
+          message: `"${note.title}" will be permanently removed.`,
+          confirmText: 'Delete',
+          onConfirm: doDelete
+        });
+      } else {
+        doDelete();
+      }
     });
   }
 }

@@ -63,6 +63,15 @@ function readUrlParams() {
     }
   }
 
+  if (params.has('sort')) {
+    view.sort = params.get('sort');
+  } else {
+    const defaultSort = Store.getSettings().preferences?.defaultTaskSort;
+    if (defaultSort) {
+      view.sort = defaultSort;
+    }
+  }
+
   if (params.has('edit')) {
     const editId = params.get('edit');
     setTimeout(() => openTaskModal(editId), 100);
@@ -925,17 +934,25 @@ function wireTaskCards() {
       deleteBtn.addEventListener('click', () => {
         const task = Store.getTask(id);
         if (!task) return;
-        App.confirm({
-          title: 'Delete task?',
-          message: `"${task.title}" will be permanently removed.`,
-          confirmText: 'Delete',
-          onConfirm: () => {
-            view.selectedTaskIds.delete(id);
-            Store.deleteTask(id);
-            App.toast('Task deleted', 'info');
-            render();
-          }
-        });
+
+        const doDelete = () => {
+          view.selectedTaskIds.delete(id);
+          Store.deleteTask(id);
+          App.toast('Task deleted', 'info');
+          render();
+        };
+
+        const confirmDelete = Store.getSettings().preferences?.confirmDelete !== false;
+        if (confirmDelete) {
+          App.confirm({
+            title: 'Delete task?',
+            message: `"${task.title}" will be permanently removed.`,
+            confirmText: 'Delete',
+            onConfirm: doDelete
+          });
+        } else {
+          doDelete();
+        }
       });
     }
   });

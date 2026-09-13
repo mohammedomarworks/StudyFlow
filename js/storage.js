@@ -586,17 +586,29 @@ const Store = {
         sound: true,
         autoBreak: false,
         dailyGoal: 120   // daily focus goal in minutes (default 2h, 0 = disabled)
-      }
+      },
+      preferences: {
+        confirmDelete: true,           // show confirm modal before deleting tasks/notes
+        defaultTaskSort: 'due-asc',    // default sort on Tasks page
+        motion: 'system'               // 'system' | 'reduce' | 'full'
+      },
+      lastExportAt: null               // ISO timestamp of last backup export
     };
     const s = this._read(this.KEYS.settings, {});
     const raw = (s && typeof s === 'object') ? s : {};
     const pomo = (raw.pomodoro && typeof raw.pomodoro === 'object') ? raw.pomodoro : {};
+    const prefs = (raw.preferences && typeof raw.preferences === 'object') ? raw.preferences : {};
+
     // Migrate the legacy `focusTime` key to `focus` if an old backup is loaded.
     if (pomo.focus == null && pomo.focusTime != null) pomo.focus = pomo.focusTime;
     const normalizeDuration = (value, fallback, min, max) => {
       const n = Number(value);
       return Number.isFinite(n) ? Math.min(max, Math.max(min, Math.round(n))) : fallback;
     };
+
+    const validSorts = ['due-asc', 'due-desc', 'priority-desc', 'title-asc', 'duration-desc'];
+    const validMotions = ['system', 'reduce', 'full'];
+
     return {
       ...defaults,
       ...raw,
@@ -610,7 +622,15 @@ const Store = {
         sound: typeof pomo.sound === 'boolean' ? pomo.sound : defaults.pomodoro.sound,
         autoBreak: typeof pomo.autoBreak === 'boolean' ? pomo.autoBreak : defaults.pomodoro.autoBreak,
         dailyGoal: normalizeDuration(pomo.dailyGoal != null ? pomo.dailyGoal : defaults.pomodoro.dailyGoal, defaults.pomodoro.dailyGoal, 0, 720)
-      }
+      },
+      preferences: {
+        ...defaults.preferences,
+        ...prefs,
+        confirmDelete: typeof prefs.confirmDelete === 'boolean' ? prefs.confirmDelete : defaults.preferences.confirmDelete,
+        defaultTaskSort: validSorts.includes(prefs.defaultTaskSort) ? prefs.defaultTaskSort : defaults.preferences.defaultTaskSort,
+        motion: validMotions.includes(prefs.motion) ? prefs.motion : defaults.preferences.motion
+      },
+      lastExportAt: (typeof raw.lastExportAt === 'string' && raw.lastExportAt) ? raw.lastExportAt : null
     };
   },
 
@@ -620,13 +640,16 @@ const Store = {
     this._write(this.KEYS.settings, s);
   },
 
-  /** Merge-save settings. Nested `pomodoro` is merged (not replaced) so saving
-      only durations never drops the sound/autoBreak preferences. */
+  /** Merge-save settings. Nested `pomodoro` and `preferences` are merged (not replaced)
+      so saving only a subset never drops peer preferences. */
   saveSettings(newSettings = {}) {
     const current = this.getSettings();
     const merged = { ...current, ...newSettings };
     if (newSettings.pomodoro) {
       merged.pomodoro = { ...current.pomodoro, ...newSettings.pomodoro };
+    }
+    if (newSettings.preferences) {
+      merged.preferences = { ...current.preferences, ...newSettings.preferences };
     }
     this._write(this.KEYS.settings, merged);
     return merged;
@@ -699,11 +722,45 @@ const Store = {
     });
   },
 
+  /* ===================== STORAGE DIAGNOSTICS =========================== */
+  /** In-memory storage overview and entity diagnostics */
+  getDiagnostics() {
+    const tasks = this.getTasks();
+    const subjects = this.getSubjects();
+    const notes = this.getNotes();
+    const sessions = this.getSessions();
+    const activity = this.getActivity(100);
+    const settings = this.getSettings();
+    const studyStats = this.getStudyStats();
+
+    const activeTasks = tasks.filter(t => !t.completed).length;
+    const completedTasks = tasks.filter(t => t.completed).length;
+    const pinnedNotes = notes.filter(n => n.pinned).length;
+
+    return {
+      subjectsCount: subjects.length,
+      tasksTotal: tasks.length,
+      tasksActive: activeTasks,
+      tasksCompleted: completedTasks,
+      notesTotal: notes.length,
+      notesPinned: pinnedNotes,
+      sessionsCount: sessions.length,
+      focusMinutes: studyStats.totalMinutes,
+      focusHours: studyStats.totalHours,
+      activityCount: activity.length,
+      lastExportAt: settings.lastExportAt
+    };
+  },
+
   /* ===================== BACKUP & RESTORE =============================== */
   exportJSON() {
+    const nowISO = new Date().toISOString();
+    // Record export timestamp in settings
+    this.saveSettings({ lastExportAt: nowISO });
+
     const data = {
-      version: '1.2.0',
-      exportedAt: new Date().toISOString(),
+      version: '1.3.0',
+      exportedAt: nowISO,
       subjects: this.getSubjects(),
       tasks: this.getTasks(),
       notes: this.getNotes(),
@@ -714,45 +771,234 @@ const Store = {
     return JSON.stringify(data, null, 2);
   },
 
-  importJSON(jsonString) {
-    let data;
-    try {
-      data = JSON.parse(jsonString);
-    } catch (e) {
-      return { success: false, error: 'Could not read the file — it is not valid JSON.' };
+  /** Validate a backup file string or parsed object non-destructively.
+      Returns { valid: true, version, exportedAt, counts, currentCounts, normalizedData }
+      or { valid: false, error }. */
+  validateBackup(input) {
+    let data = input;
+    if (typeof input === 'string') {
+      try {
+        data = JSON.parse(input);
+      } catch (e) {
+        return { valid: false, error: 'Could not read the file — it is not valid JSON.' };
+      }
     }
 
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
-      return { success: false, error: 'Invalid backup file format.' };
+      return { valid: false, error: 'Invalid backup file format: root must be a JSON object.' };
     }
 
-    // Must look like a StudyFlow backup before we touch existing data.
-    const known = ['subjects', 'tasks', 'notes', 'sessions', 'activity', 'settings'];
-    const hasKnown = known.some(k => k in data);
+    const knownKeys = ['subjects', 'tasks', 'notes', 'sessions', 'activity', 'settings'];
+    const hasKnown = knownKeys.some(k => k in data);
     if (!hasKnown) {
-      return { success: false, error: 'This file does not look like a StudyFlow backup.' };
+      return { valid: false, error: 'This file does not contain recognized StudyFlow data.' };
+    }
+
+    // Safely sanitize and normalize data entities
+    let normalizedSubjects = null;
+    if ('subjects' in data) {
+      if (!Array.isArray(data.subjects)) {
+        return { valid: false, error: 'Malformed backup: "subjects" must be a list.' };
+      }
+      normalizedSubjects = data.subjects
+        .filter(s => s && typeof s === 'object')
+        .map(s => ({
+          id: s.id || this.uid(),
+          name: (typeof s.name === 'string' && s.name.trim()) ? s.name.trim() : 'Untitled subject',
+          color: this._safeColor(s.color),
+          teacher: typeof s.teacher === 'string' ? s.teacher : '',
+          examDate: Dates.parse(s.examDate) ? s.examDate : '',
+          createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString()
+        }));
+    }
+
+    let normalizedTasks = null;
+    if ('tasks' in data) {
+      if (!Array.isArray(data.tasks)) {
+        return { valid: false, error: 'Malformed backup: "tasks" must be a list.' };
+      }
+      normalizedTasks = data.tasks
+        .filter(t => t && typeof t === 'object')
+        .map(t => ({
+          id: t.id || this.uid(),
+          title: (typeof t.title === 'string' && t.title.trim()) ? t.title.trim() : 'Untitled task',
+          subjectId: typeof t.subjectId === 'string' ? t.subjectId : '',
+          dueDate: Dates.parse(t.dueDate) ? t.dueDate : Dates.todayISO(),
+          priority: ['high', 'medium', 'low'].includes(t.priority) ? t.priority : 'medium',
+          estimate: Math.max(0, Math.min(720, Number(t.estimate) || 0)),
+          category: (typeof t.category === 'string' && t.category.trim()) ? t.category.trim() : 'General',
+          notes: typeof t.notes === 'string' ? t.notes : '',
+          completed: t.completed === true || t.completed === 'true',
+          completedAt: t.completedAt || ((t.completed === true || t.completed === 'true') ? t.createdAt || new Date().toISOString() : null),
+          createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString()
+        }));
+    }
+
+    let normalizedNotes = null;
+    if ('notes' in data) {
+      if (!Array.isArray(data.notes)) {
+        return { valid: false, error: 'Malformed backup: "notes" must be a list.' };
+      }
+      normalizedNotes = data.notes
+        .filter(n => n && typeof n === 'object')
+        .map(n => ({
+          id: n.id || this.uid(),
+          title: (typeof n.title === 'string' && n.title.trim()) ? n.title.trim() : 'Untitled Note',
+          subjectId: typeof n.subjectId === 'string' ? n.subjectId : '',
+          content: typeof n.content === 'string' ? n.content : '',
+          tags: Array.isArray(n.tags) ? n.tags.filter(tag => typeof tag === 'string') : [],
+          pinned: Boolean(n.pinned),
+          createdAt: typeof n.createdAt === 'string' ? n.createdAt : new Date().toISOString(),
+          updatedAt: typeof n.updatedAt === 'string' ? n.updatedAt : (typeof n.createdAt === 'string' ? n.createdAt : new Date().toISOString())
+        }));
+    }
+
+    let normalizedSessions = null;
+    if ('sessions' in data) {
+      if (!Array.isArray(data.sessions)) {
+        return { valid: false, error: 'Malformed backup: "sessions" must be a list.' };
+      }
+      normalizedSessions = data.sessions
+        .filter(s => s && typeof s === 'object')
+        .map(s => ({
+          id: s.id || this.uid(),
+          subjectId: s.subjectId || '',
+          taskId: s.taskId || '',
+          durationMinutes: Math.max(1, Math.min(720, Number(s.durationMinutes) || 25)),
+          type: s.type === 'break' ? 'break' : 'focus',
+          completedAt: s.completedAt || new Date().toISOString(),
+          notes: s.notes || ''
+        }));
+    }
+
+    let normalizedActivity = null;
+    if ('activity' in data) {
+      if (!Array.isArray(data.activity)) {
+        return { valid: false, error: 'Malformed backup: "activity" must be a list.' };
+      }
+      normalizedActivity = data.activity
+        .filter(a => a && typeof a === 'object')
+        .slice(0, 50)
+        .map(a => ({
+          id: a.id || this.uid(),
+          type: a.type || 'activity',
+          title: (typeof a.title === 'string' && a.title) ? a.title : 'Activity event',
+          timestamp: typeof a.timestamp === 'string' ? a.timestamp : new Date().toISOString(),
+          meta: (a.meta && typeof a.meta === 'object') ? a.meta : {}
+        }));
+    }
+
+    let normalizedSettings = null;
+    if ('settings' in data && data.settings && typeof data.settings === 'object') {
+      const s = data.settings;
+      const pomo = (s.pomodoro && typeof s.pomodoro === 'object') ? s.pomodoro : {};
+      const prefs = (s.preferences && typeof s.preferences === 'object') ? s.preferences : {};
+      const validSorts = ['due-asc', 'due-desc', 'priority-desc', 'title-asc', 'duration-desc'];
+      const validMotions = ['system', 'reduce', 'full'];
+
+      normalizedSettings = {
+        theme: ['light', 'dark', 'system'].includes(s.theme) ? s.theme : 'system',
+        pomodoro: {
+          focus: Math.max(1, Math.min(120, Number(pomo.focus || pomo.focusTime) || 25)),
+          shortBreak: Math.max(1, Math.min(30, Number(pomo.shortBreak) || 5)),
+          longBreak: Math.max(1, Math.min(60, Number(pomo.longBreak) || 15)),
+          sound: typeof pomo.sound === 'boolean' ? pomo.sound : true,
+          autoBreak: typeof pomo.autoBreak === 'boolean' ? pomo.autoBreak : false,
+          dailyGoal: Math.max(0, Math.min(720, Number(pomo.dailyGoal != null ? pomo.dailyGoal : 120)))
+        },
+        preferences: {
+          confirmDelete: typeof prefs.confirmDelete === 'boolean' ? prefs.confirmDelete : true,
+          defaultTaskSort: validSorts.includes(prefs.defaultTaskSort) ? prefs.defaultTaskSort : 'due-asc',
+          motion: validMotions.includes(prefs.motion) ? prefs.motion : 'system'
+        },
+        lastExportAt: (typeof s.lastExportAt === 'string' && s.lastExportAt) ? s.lastExportAt : null
+      };
+    }
+
+    const currentDiag = this.getDiagnostics();
+
+    return {
+      valid: true,
+      version: data.version || '1.0.0',
+      exportedAt: data.exportedAt || null,
+      counts: {
+        subjects: normalizedSubjects ? normalizedSubjects.length : 0,
+        tasks: normalizedTasks ? normalizedTasks.length : 0,
+        notes: normalizedNotes ? normalizedNotes.length : 0,
+        sessions: normalizedSessions ? normalizedSessions.length : 0,
+        activity: normalizedActivity ? normalizedActivity.length : 0,
+        hasSettings: Boolean(normalizedSettings)
+      },
+      currentCounts: {
+        subjects: currentDiag.subjectsCount,
+        tasks: currentDiag.tasksTotal,
+        notes: currentDiag.notesTotal,
+        sessions: currentDiag.sessionsCount,
+        activity: currentDiag.activityCount
+      },
+      normalizedData: {
+        version: data.version || '1.3.0',
+        subjects: normalizedSubjects,
+        tasks: normalizedTasks,
+        notes: normalizedNotes,
+        sessions: normalizedSessions,
+        activity: normalizedActivity,
+        settings: normalizedSettings
+      }
+    };
+  },
+
+  /** Apply an already-validated backup to storage atomically. */
+  applyBackup(normalizedData) {
+    if (!normalizedData || typeof normalizedData !== 'object') {
+      return { success: false, error: 'Invalid backup payload.' };
     }
 
     try {
-      if (Array.isArray(data.subjects)) this._write(this.KEYS.subjects, data.subjects);
-      if (Array.isArray(data.tasks)) this._write(this.KEYS.tasks, data.tasks);
-      if (Array.isArray(data.notes)) this._write(this.KEYS.notes, data.notes);
-      if (Array.isArray(data.sessions)) this._write(this.KEYS.sessions, data.sessions);
-      if (Array.isArray(data.activity)) this._write(this.KEYS.activity, data.activity);
-      if (data.settings && typeof data.settings === 'object') this._write(this.KEYS.settings, data.settings);
+      if (Array.isArray(normalizedData.subjects)) {
+        this._write(this.KEYS.subjects, normalizedData.subjects);
+      }
+      if (Array.isArray(normalizedData.tasks)) {
+        this._write(this.KEYS.tasks, normalizedData.tasks);
+      }
+      if (Array.isArray(normalizedData.notes)) {
+        this._write(this.KEYS.notes, normalizedData.notes);
+      }
+      if (Array.isArray(normalizedData.sessions)) {
+        this._write(this.KEYS.sessions, normalizedData.sessions);
+      }
+      if (Array.isArray(normalizedData.activity)) {
+        this._write(this.KEYS.activity, normalizedData.activity);
+      }
+      if (normalizedData.settings) {
+        this._write(this.KEYS.settings, normalizedData.settings);
+      }
 
-      return {
-        success: true,
-        counts: {
-          subjects: (data.subjects || []).length,
-          tasks: (data.tasks || []).length,
-          notes: (data.notes || []).length,
-          sessions: (data.sessions || []).length
-        }
+      // Mark seeded so starter seed never fires on refresh
+      localStorage.setItem(this.KEYS.seeded, '1');
+
+      // Log activity
+      const counts = {
+        subjects: (normalizedData.subjects || []).length,
+        tasks: (normalizedData.tasks || []).length,
+        notes: (normalizedData.notes || []).length,
+        sessions: (normalizedData.sessions || []).length
       };
+      this.logActivity('backup_import', `Restored backup (${counts.tasks} tasks, ${counts.subjects} subjects, ${counts.notes} notes)`);
+
+      return { success: true, counts };
     } catch (e) {
-      return { success: false, error: 'Failed to import backup: ' + e.message };
+      return { success: false, error: 'Failed to restore backup: ' + e.message };
     }
+  },
+
+  importJSON(jsonString) {
+    const validation = this.validateBackup(jsonString);
+    if (!validation.valid) {
+      return { success: false, error: validation.error };
+    }
+    const res = this.applyBackup(validation.normalizedData);
+    return res;
   },
 
   /* ======================= SEED (first run) ============================= */

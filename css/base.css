@@ -177,3 +177,12 @@ h3 { font-size: var(--fs-xl); }
     scroll-behavior: auto !important;
   }
 }
+
+html[data-reduced-motion="reduce"] *,
+html[data-reduced-motion="reduce"] *::before,
+html[data-reduced-motion="reduce"] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

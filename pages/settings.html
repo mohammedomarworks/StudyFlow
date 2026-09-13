@@ -12,6 +12,9 @@
         var pref = s.theme || 'system';
         var actual = pref === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
         document.documentElement.setAttribute('data-theme', actual);
+        if (s.preferences && s.preferences.motion === 'reduce') {
+          document.documentElement.setAttribute('data-reduced-motion', 'reduce');
+        }
       } catch (e) {}
     })();
   </script>
@@ -67,12 +70,12 @@
   <main class="page">
     <div class="container" style="max-width:800px">
       <div class="page-header">
-        <h1>Settings & Data Backup</h1>
-        <p>Customize your experience, theme, Pomodoro focus lengths, and backup your study data.</p>
+        <h1>Settings & Preferences</h1>
+        <p>Personalize your study experience, configure focus timers, manage data backups, and review keyboard shortcuts.</p>
       </div>
 
-      <!-- Appearance / Theme Card -->
-      <div class="card settings-card mb-6">
+      <!-- 1. Appearance / Theme Card -->
+      <div class="card settings-card mb-6" id="sectionAppearance">
         <div class="card__head">
           <h2 class="card__title">Appearance & Theme</h2>
         </div>
@@ -105,34 +108,45 @@
         </div>
       </div>
 
-      <!-- Focus Timer Settings Card -->
-      <div class="card settings-card mb-6">
+      <!-- 2. Focus Timer Settings Card -->
+      <div class="card settings-card mb-6" id="sectionFocus">
         <div class="card__head">
           <h2 class="card__title">Pomodoro & Focus Timer</h2>
         </div>
         <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Configure interval durations in minutes for your study focus sessions and breaks.</p>
         <form id="pomoSettingsForm">
-          <div class="form-row form-row-3">
+          <div class="form-row form-row-3 mb-4">
             <div class="field">
               <label for="pomoFocus">Focus Duration (min)</label>
               <input type="number" class="input" id="pomoFocus" min="1" max="120" value="25" required />
+              <small class="text-muted">Standard: 25 min (1–120)</small>
             </div>
             <div class="field">
               <label for="pomoShort">Short Break (min)</label>
               <input type="number" class="input" id="pomoShort" min="1" max="30" value="5" required />
+              <small class="text-muted">Standard: 5 min (1–30)</small>
             </div>
             <div class="field">
               <label for="pomoLong">Long Break (min)</label>
               <input type="number" class="input" id="pomoLong" min="1" max="60" value="15" required />
+              <small class="text-muted">Standard: 15 min (1–60)</small>
             </div>
           </div>
 
-          <div class="form-row mb-4">
-            <div class="field" style="margin-bottom:0">
-              <label for="pomoDailyGoal">Daily Focus Goal (min)</label>
-              <input type="number" class="input" id="pomoDailyGoal" min="0" max="720" step="15" value="120" />
-              <small class="text-muted" style="display:block;margin-top:4px">Target focus time per day (e.g., 120 min = 2 hours. Set to 0 to disable).</small>
+          <div class="field mb-4">
+            <label for="pomoDailyGoal">Daily Focus Goal</label>
+            <div class="flex items-center gap-3">
+              <input type="number" class="input" id="pomoDailyGoal" min="0" max="720" step="15" value="120" style="max-width:180px" />
+              <span class="text-muted" id="dailyGoalHuman" style="font-size:var(--fs-sm);font-weight:600">Target: 2h 0m</span>
             </div>
+            <div class="goal-presets" aria-label="Daily goal presets">
+              <button type="button" class="goal-preset-btn" data-goal="0">Off (0m)</button>
+              <button type="button" class="goal-preset-btn" data-goal="60">1 Hour (60m)</button>
+              <button type="button" class="goal-preset-btn" data-goal="120">2 Hours (120m)</button>
+              <button type="button" class="goal-preset-btn" data-goal="180">3 Hours (180m)</button>
+              <button type="button" class="goal-preset-btn" data-goal="240">4 Hours (240m)</button>
+            </div>
+            <small class="text-muted" style="display:block;margin-top:6px">How much focused study would you like to complete each day? Target focus time tracked from completed Focus sessions. Set to 0 to disable.</small>
           </div>
 
           <div class="settings-row">
@@ -140,39 +154,129 @@
               <div class="settings-row__title">Completion sound</div>
               <div class="settings-row__desc">Play a gentle chime when a focus session or break ends.</div>
             </div>
-            <label class="switch">
+            <label class="switch" aria-label="Toggle timer completion sound">
               <input type="checkbox" id="pomoSound" />
               <span class="switch-slider"></span>
             </label>
           </div>
 
-          <div class="settings-row" style="margin-bottom:var(--space-4)">
+          <div class="settings-row mb-4">
             <div class="settings-row__info">
               <div class="settings-row__title">Auto-start breaks</div>
               <div class="settings-row__desc">Automatically start the break countdown after a focus session completes.</div>
             </div>
-            <label class="switch">
+            <label class="switch" aria-label="Toggle auto-start breaks">
               <input type="checkbox" id="pomoAutoBreak" />
               <span class="switch-slider"></span>
             </label>
           </div>
 
-          <button type="submit" class="btn btn-primary">Save Timer Settings</button>
+          <button type="submit" class="btn btn-primary" id="saveTimerBtn">Save Focus Settings</button>
         </form>
       </div>
 
-      <!-- Data Backup & Portability Card -->
-      <div class="card settings-card mb-6">
+      <!-- 3. App Preferences Card -->
+      <div class="card settings-card mb-6" id="sectionAppPrefs">
         <div class="card__head">
-          <h2 class="card__title">Data Backup & Restore</h2>
+          <h2 class="card__title">App Preferences</h2>
         </div>
-        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">All your StudyFlow data is stored locally in your browser. Export a JSON backup to keep your records safe or transfer them between devices.</p>
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Customize general application behavior, default views, and accessibility options.</p>
+        <form id="appPrefsForm">
+          <div class="settings-row mb-4">
+            <div class="settings-row__info">
+              <div class="settings-row__title">Confirm before deleting items</div>
+              <div class="settings-row__desc">Show a confirmation prompt before deleting individual tasks or notes.</div>
+            </div>
+            <label class="switch" aria-label="Toggle delete confirmation">
+              <input type="checkbox" id="prefConfirmDelete" checked />
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+
+          <div class="form-row mb-4">
+            <div class="field">
+              <label for="prefTaskSort">Default Task Sort Order</label>
+              <select class="select" id="prefTaskSort">
+                <option value="due-asc">Due Date (Earliest first)</option>
+                <option value="due-desc">Due Date (Latest first)</option>
+                <option value="priority-desc">Priority (High to Low)</option>
+                <option value="title-asc">Title (A to Z)</option>
+                <option value="duration-desc">Estimated Duration (Longest first)</option>
+              </select>
+              <small class="text-muted">Applied when opening the Tasks page without search filters.</small>
+            </div>
+            <div class="field">
+              <label for="prefMotion">Motion & Animation</label>
+              <select class="select" id="prefMotion">
+                <option value="system">System Default (Follow OS)</option>
+                <option value="reduce">Reduced Motion (Minimize animation)</option>
+                <option value="full">Standard Motion (Animations enabled)</option>
+              </select>
+              <small class="text-muted">Respects motion sensitivity and accessibility preferences.</small>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary" id="savePrefsBtn">Save Preferences</button>
+        </form>
+      </div>
+
+      <!-- 4. Data Backup & Storage Overview Card -->
+      <div class="card settings-card mb-6" id="sectionDataBackup">
+        <div class="card__head">
+          <h2 class="card__title">Data Backup & Storage Overview</h2>
+        </div>
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">All your StudyFlow records live locally in your browser. Regularly export backups to protect your coursework or migrate across devices.</p>
+
+        <!-- Live Storage Diagnostics -->
+        <h3 style="font-size:var(--fs-sm);font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:var(--space-3)">StudyFlow Storage Overview</h3>
+        <div class="diagnostics-grid" id="diagnosticsGrid">
+          <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagSubjects">—</span>
+            <span class="diagnostics-label">Subjects</span>
+            <span class="diagnostics-sub">Active courses</span>
+          </div>
+          <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagTasks">—</span>
+            <span class="diagnostics-label">Tasks</span>
+            <span class="diagnostics-sub" id="diagTasksSub">Active & completed</span>
+          </div>
+          <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagNotes">—</span>
+            <span class="diagnostics-label">Notes</span>
+            <span class="diagnostics-sub" id="diagNotesSub">Knowledge entries</span>
+          </div>
+          <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagSessions">—</span>
+            <span class="diagnostics-label">Focus Sessions</span>
+            <span class="diagnostics-sub" id="diagFocusHours">— hrs total</span>
+          </div>
+          <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagActivity">—</span>
+            <span class="diagnostics-label">Activity Log</span>
+            <span class="diagnostics-sub">Recent actions</span>
+          </div>
+          <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagStorageStatus">Local</span>
+            <span class="diagnostics-label">Storage Type</span>
+            <span class="diagnostics-sub">HTML5 LocalStorage</span>
+          </div>
+        </div>
+        <div class="diagnostics-footer mb-4">
+          <span>Last Backup Export: <b id="lastExportDisplay">Never</b></span>
+          <span class="text-muted">Storage derived in-memory</span>
+        </div>
+
+        <div class="divider mb-4" style="height:1px;background:var(--border);border:none"></div>
+
+        <h3 style="font-size:var(--fs-sm);font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:var(--space-2)">Backup & Restore</h3>
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Download a complete JSON snapshot or restore previous study data. Backups are verified and previewed before restoring.</p>
+
         <div class="flex wrap gap-3">
-          <button type="button" class="btn btn-ghost" id="exportBtn">
+          <button type="button" class="btn btn-ghost" id="exportBtn" title="Download JSON backup">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Export Backup (.json)
           </button>
-          <label class="btn btn-ghost" style="cursor:pointer; margin:0">
+          <label class="btn btn-ghost" style="cursor:pointer; margin:0" title="Restore from JSON backup">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             Import Backup (.json)
             <input type="file" id="importFileInput" accept=".json,application/json" style="display:none" />
@@ -180,16 +284,85 @@
         </div>
       </div>
 
-      <!-- Danger Zone Card -->
-      <div class="card settings-card danger-card">
+      <!-- 5. Keyboard Shortcuts & Help Card -->
+      <div class="card settings-card mb-6" id="sectionHelp">
+        <div class="card__head">
+          <h2 class="card__title">Keyboard Shortcuts & Help</h2>
+        </div>
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Quick keyboard references to navigate StudyFlow efficiently without reaching for the mouse.</p>
+
+        <div class="shortcuts-grid mb-4">
+          <div class="shortcut-card">
+            <div class="shortcut-header">
+              <span class="shortcut-keys"><kbd>⌘</kbd> <kbd>K</kbd> / <kbd>Ctrl</kbd> <kbd>K</kbd></span>
+              <span class="shortcut-badge">Global</span>
+            </div>
+            <div class="shortcut-desc">Open quick search to jump directly to any task, subject, or note across StudyFlow.</div>
+          </div>
+          <div class="shortcut-card">
+            <div class="shortcut-header">
+              <span class="shortcut-keys"><kbd>Esc</kbd></span>
+              <span class="shortcut-badge">Global</span>
+            </div>
+            <div class="shortcut-desc">Instantly close any active modal, detail overlay, or global search dialog.</div>
+          </div>
+          <div class="shortcut-card">
+            <div class="shortcut-header">
+              <span class="shortcut-keys"><kbd>Space</kbd></span>
+              <span class="shortcut-badge">Focus Timer</span>
+            </div>
+            <div class="shortcut-desc">Start or pause the focus countdown timer (when no text input is active).</div>
+          </div>
+          <div class="shortcut-card">
+            <div class="shortcut-header">
+              <span class="shortcut-keys"><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></span>
+              <span class="shortcut-badge">Calendar</span>
+            </div>
+            <div class="shortcut-desc">Navigate days with roving focus across the academic calendar grid.</div>
+          </div>
+          <div class="shortcut-card">
+            <div class="shortcut-header">
+              <span class="shortcut-keys"><kbd>Enter</kbd> / <kbd>Space</kbd></span>
+              <span class="shortcut-badge">Calendar & Notes</span>
+            </div>
+            <div class="shortcut-desc">Open the day detail modal for the focused calendar day, or view note details.</div>
+          </div>
+          <div class="shortcut-card">
+            <div class="shortcut-header">
+              <span class="shortcut-keys"><kbd>⌘</kbd> <kbd>Enter</kbd> / <kbd>Ctrl</kbd> <kbd>Enter</kbd></span>
+              <span class="shortcut-badge">Notes</span>
+            </div>
+            <div class="shortcut-desc">Quickly save note changes while typing inside the note editor modal.</div>
+          </div>
+        </div>
+
+        <div class="alert alert-info" style="font-size:var(--fs-xs);padding:var(--space-3) var(--space-4);background:var(--primary-soft);border:1px solid color-mix(in srgb, var(--primary) 30%, var(--border));border-radius:var(--radius-sm);color:var(--text)">
+          <b>Privacy & Data Safety Note:</b> StudyFlow runs 100% locally in your browser. No accounts, telemetry, or remote servers store your information. Your planner is preserved in HTML5 LocalStorage. Periodically export a backup if you clear browser data or switch devices.
+        </div>
+      </div>
+
+      <!-- 6. Danger Zone Card -->
+      <div class="card settings-card danger-card" id="sectionDanger">
         <div class="card__head">
           <h2 class="card__title" style="color:var(--danger)">Reset & Danger Zone</h2>
         </div>
-        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Clear your local storage data or reload fresh starter demo data.</p>
-        <div class="flex wrap gap-3">
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Irreversible data actions. Use caution when resetting or reloading starter content.</p>
+
+        <div class="settings-row" style="padding-top:0">
+          <div class="settings-row__info">
+            <div class="settings-row__title">Load Starter Demo Data</div>
+            <div class="settings-row__desc">Replaces your current planner records with starter example subjects, tasks, and notes.</div>
+          </div>
           <button type="button" class="btn btn-ghost" id="reloadDemoBtn">
-            Reload Starter Demo Data
+            Load Starter Demo Data
           </button>
+        </div>
+
+        <div class="settings-row" style="border-bottom:none">
+          <div class="settings-row__info">
+            <div class="settings-row__title" style="color:var(--danger)">Reset All Data</div>
+            <div class="settings-row__desc">Permanently removes all tasks, subjects, notes, sessions, activity history, and settings from this browser. The app will open clean and empty without automatic reseeding.</div>
+          </div>
           <button type="button" class="btn btn-danger" id="clearAllBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>
             Reset All Data
@@ -198,6 +371,42 @@
       </div>
     </div>
   </main>
+
+  <!-- ===================== IMPORT PREVIEW MODAL ===================== -->
+  <div class="modal-overlay" id="importPreviewModal" role="dialog" aria-modal="true" aria-labelledby="importPreviewTitle">
+    <div class="modal" style="max-width:540px">
+      <div class="modal__head">
+        <h3 id="importPreviewTitle">Restore StudyFlow Backup</h3>
+        <button class="icon-btn" data-close aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="alert alert-warning mb-4" style="font-size:var(--fs-xs);padding:var(--space-3);background:color-mix(in srgb, var(--warning) 10%, var(--surface));border:1px solid var(--warning);border-radius:var(--radius-sm);color:var(--text)">
+          <b>⚠️ Caution:</b> Restoring this backup will replace your current browser planner data. Please verify the incoming counts before confirming.
+        </div>
+
+        <div id="importMetaInfo" class="text-muted mb-3" style="font-size:var(--fs-xs)"></div>
+
+        <table class="import-preview-table" aria-label="Backup restoration preview">
+          <thead>
+            <tr>
+              <th>Data Item</th>
+              <th>In Browser</th>
+              <th>Incoming Backup</th>
+            </tr>
+          </thead>
+          <tbody id="importPreviewBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn-ghost" data-close id="cancelImportBtn">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmRestoreBtn">Restore Backup</button>
+      </div>
+    </div>
+  </div>
 
   <footer class="footer">Made with <b>StudyFlow</b> · © <span data-year></span></footer>
 
