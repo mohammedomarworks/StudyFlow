@@ -19,6 +19,10 @@
 
 ---
 
+> **Note for Developers**: StudyFlow v2.0 development is currently in progress on branch `feature/v2-foundation`. Phase A establishes the Supabase database schema, Row Level Security (RLS) policies, and repository boundary. The application currently operates in stable v1.5.0 local-first mode with zero cloud sync or authentication UI active. See [`docs/v2-architecture.md`](docs/v2-architecture.md) for architectural specifications.
+
+---
+
 ## ✨ Features Overview
 
 StudyFlow provides an integrated suite of student productivity tools designed to eliminate study friction:
