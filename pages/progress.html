@@ -40,6 +40,7 @@
         <li><a href="../index.html" data-nav="dashboard">Dashboard</a></li>
         <li><a href="subjects.html" data-nav="subjects">Subjects</a></li>
         <li><a href="tasks.html" data-nav="tasks">Tasks</a></li>
+        <li><a href="habits.html" data-nav="habits">Habits</a></li>
         <li><a href="calendar.html" data-nav="calendar">Calendar</a></li>
         <li><a href="timer.html" data-nav="timer">Focus Timer</a></li>
         <li><a href="progress.html" data-nav="progress">Progress</a></li>
@@ -197,6 +198,37 @@
           </div>
           <div id="workloadFocusContent" class="mt-2">
             <!-- Task estimate vs actual focus comparison -->
+          </div>
+        </div>
+      </section>
+
+      <!-- Habit Consistency & Tracking Grid -->
+      <section class="grid two-col mb-6" id="habitsAnalyticsSection">
+        <!-- Habit Consistency Overview Card -->
+        <div class="card" id="habitConsistencyCard">
+          <div class="card__head flex-between">
+            <div>
+              <h2 class="card__title">Habit Consistency & Routines</h2>
+              <small class="text-muted" id="habitConsistencySubtitle">Completion rates and consistency metrics</small>
+            </div>
+            <a href="habits.html" class="btn btn-ghost btn-sm">Manage Habits →</a>
+          </div>
+          <div id="habitConsistencyContent" class="mt-2">
+            <!-- Dynamically populated habit consistency summary -->
+          </div>
+        </div>
+
+        <!-- Individual Habit Performance Card -->
+        <div class="card" id="habitPerformanceCard">
+          <div class="card__head flex-between">
+            <div>
+              <h2 class="card__title">Habit Performance</h2>
+              <small class="text-muted">Breakdown by active routine</small>
+            </div>
+            <span class="badge badge-primary" id="habitPerformanceBadge">0 Active</span>
+          </div>
+          <div id="habitPerformanceList" class="mt-2">
+            <!-- Dynamically populated habit progress bars -->
           </div>
         </div>
       </section>

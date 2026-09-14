@@ -119,6 +119,23 @@ const Dates = {
     if (typeof isoString !== 'string') return '';
     const date = new Date(isoString);
     return isNaN(date.getTime()) ? '' : this.toISO(date);
+  },
+
+  /** 7 days of the local week (Monday through Sunday) containing baseDateISO */
+  getWeekDates(baseDateISO = this.todayISO()) {
+    const base = this.parse(baseDateISO) || this.parse(this.todayISO());
+    const day = base.getDay(); // 0=Sun, 1=Mon...6=Sat
+    const diffToMon = (day === 0 ? -6 : 1 - day);
+    const monday = new Date(base);
+    monday.setDate(base.getDate() + diffToMon);
+
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      days.push(this.toISO(d));
+    }
+    return days;
   }
 };
 
@@ -128,8 +145,10 @@ const Dates = {
 const Store = {
   KEYS: {
     subjects: 'sp_subjects',
-    tasks:    'sp_tasks',
-    notes:    'sp_notes',
+    tasks:            'sp_tasks',
+    habits:           'sp_habits',
+    habitCompletions: 'sp_habit_completions',
+    notes:            'sp_notes',
     sessions: 'sp_sessions',
     activity: 'sp_activity',
     settings: 'sp_settings',
@@ -252,6 +271,9 @@ const Store = {
     const tasks = this.getTasks().map(t => t.subjectId === id ? { ...t, subjectId: '' } : t);
     this._write(this.KEYS.tasks, tasks);
 
+    const habits = this.getHabits(true).map(h => h.subjectId === id ? { ...h, subjectId: '' } : h);
+    this._write(this.KEYS.habits, habits);
+
     const notes = this.getNotes().map(n => n.subjectId === id ? { ...n, subjectId: '' } : n);
     this._write(this.KEYS.notes, notes);
 
@@ -328,6 +350,376 @@ const Store = {
       this.logActivity('task_complete', `Completed "${t.title}"`, { taskId: t.id });
     }
     return t.completed;
+  },
+
+  /* =========================== HABITS =================================== */
+  getHabits(includeArchived = false) {
+    const list = this._arr(this.KEYS.habits).filter(h => h && typeof h === 'object');
+    const normalized = list.map(h => {
+      const targetDays = Array.isArray(h.targetDays)
+        ? h.targetDays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
+        : [0, 1, 2, 3, 4, 5, 6];
+      return {
+        id: h.id || this.uid(),
+        name: (typeof h.name === 'string' && h.name.trim()) ? h.name.trim().slice(0, 60) : 'Untitled Habit',
+        description: typeof h.description === 'string' ? h.description.trim().slice(0, 200) : '',
+        icon: (typeof h.icon === 'string' && h.icon.trim()) ? h.icon.trim().slice(0, 8) : '⚡',
+        color: this._safeColor(h.color),
+        frequency: h.frequency === 'weekdays' ? 'weekdays' : 'daily',
+        targetDays: h.frequency === 'weekdays' && targetDays.length > 0 ? targetDays : [0, 1, 2, 3, 4, 5, 6],
+        subjectId: typeof h.subjectId === 'string' ? h.subjectId : '',
+        createdAt: (typeof h.createdAt === 'string' && Dates.parse(h.createdAt.slice(0, 10))) ? h.createdAt : new Date().toISOString(),
+        archived: Boolean(h.archived)
+      };
+    });
+    return includeArchived ? normalized : normalized.filter(h => !h.archived);
+  },
+
+  getHabit(id) {
+    if (!id) return null;
+    return this.getHabits(true).find(h => h.id === id) || null;
+  },
+
+  saveHabit(data) {
+    const habits = this.getHabits(true);
+    const isNew = !data.id;
+    let saved;
+
+    const targetDays = Array.isArray(data.targetDays)
+      ? data.targetDays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
+      : [0, 1, 2, 3, 4, 5, 6];
+
+    const clean = {
+      name: (typeof data.name === 'string' && data.name.trim()) ? data.name.trim().slice(0, 60) : 'Untitled Habit',
+      description: typeof data.description === 'string' ? data.description.trim().slice(0, 200) : '',
+      icon: (typeof data.icon === 'string' && data.icon.trim()) ? data.icon.trim().slice(0, 8) : '⚡',
+      color: this._safeColor(data.color),
+      frequency: data.frequency === 'weekdays' ? 'weekdays' : 'daily',
+      targetDays: data.frequency === 'weekdays' && targetDays.length > 0 ? targetDays : [0, 1, 2, 3, 4, 5, 6],
+      subjectId: typeof data.subjectId === 'string' ? data.subjectId : '',
+      archived: Boolean(data.archived)
+    };
+
+    if (isNew) {
+      saved = {
+        ...clean,
+        id: this.uid(),
+        createdAt: data.createdAt || new Date().toISOString(),
+        archived: false
+      };
+      habits.push(saved);
+      this.logActivity('habit_create', `Created habit "${saved.name}"`, { habitId: saved.id });
+    } else {
+      const idx = habits.findIndex(h => h.id === data.id);
+      if (idx > -1) {
+        saved = { ...habits[idx], ...clean, id: data.id };
+        habits[idx] = saved;
+      } else {
+        saved = { ...clean, id: data.id, createdAt: data.createdAt || new Date().toISOString() };
+        habits.push(saved);
+      }
+    }
+    this._write(this.KEYS.habits, habits);
+    return saved;
+  },
+
+  archiveHabit(id) {
+    const habits = this.getHabits(true);
+    const h = habits.find(x => x.id === id);
+    if (!h) return false;
+    h.archived = true;
+    this._write(this.KEYS.habits, habits);
+    this.logActivity('habit_archive', `Archived habit "${h.name}"`, { habitId: h.id });
+    return true;
+  },
+
+  restoreHabit(id) {
+    const habits = this.getHabits(true);
+    const h = habits.find(x => x.id === id);
+    if (!h) return false;
+    h.archived = false;
+    this._write(this.KEYS.habits, habits);
+    this.logActivity('habit_create', `Restored habit "${h.name}"`, { habitId: h.id });
+    return true;
+  },
+
+  deleteHabit(id) {
+    const habit = this.getHabit(id);
+    const habits = this.getHabits(true).filter(h => h.id !== id);
+    this._write(this.KEYS.habits, habits);
+
+    const completions = this.getHabitCompletions().filter(c => c.habitId !== id);
+    this._write(this.KEYS.habitCompletions, completions);
+
+    if (habit) {
+      this.logActivity('habit_archive', `Deleted habit "${habit.name}"`);
+    }
+    return true;
+  },
+
+  /* ===================== HABIT COMPLETIONS ============================== */
+  getHabitCompletions(habitId = null) {
+    const list = this._arr(this.KEYS.habitCompletions).filter(c => c && typeof c === 'object');
+    const normalized = [];
+    const seen = new Set();
+    for (const c of list) {
+      if (!c.habitId || !c.date) continue;
+      if (!Dates.parse(c.date)) continue;
+      const key = `${c.habitId}_${c.date}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      normalized.push({
+        id: c.id || this.uid(),
+        habitId: String(c.habitId),
+        date: String(c.date),
+        completedAt: typeof c.completedAt === 'string' ? c.completedAt : new Date().toISOString()
+      });
+    }
+    if (habitId) {
+      return normalized.filter(c => c.habitId === habitId);
+    }
+    return normalized;
+  },
+
+  isHabitCompletedOnDate(habitId, dateISO) {
+    if (!habitId || !dateISO) return false;
+    return this.getHabitCompletions(habitId).some(c => c.date === dateISO);
+  },
+
+  toggleHabitCompletion(habitId, dateISO = Dates.todayISO()) {
+    if (!habitId || !dateISO) return null;
+    const today = Dates.todayISO();
+    if (dateISO > today) return null; // Reject future dates
+
+    const completions = this.getHabitCompletions();
+    const existingIdx = completions.findIndex(c => c.habitId === habitId && c.date === dateISO);
+    const habit = this.getHabit(habitId);
+
+    if (existingIdx > -1) {
+      completions.splice(existingIdx, 1);
+      this._write(this.KEYS.habitCompletions, completions);
+      return false;
+    } else {
+      const entry = {
+        id: this.uid(),
+        habitId,
+        date: dateISO,
+        completedAt: new Date().toISOString()
+      };
+      completions.push(entry);
+      this._write(this.KEYS.habitCompletions, completions);
+
+      if (habit) {
+        this.logActivity('habit_complete', `Completed habit "${habit.name}"`, { habitId, date: dateISO });
+      }
+      return true;
+    }
+  },
+
+  /** Explicitly set or clear completion for a habit on a date (idempotent) */
+  setHabitCompletion(habitId, dateISO, completed = true) {
+    if (!habitId || !dateISO) return false;
+    const today = Dates.todayISO();
+    if (dateISO > today) return false;
+    const isDone = this.isHabitCompletedOnDate(habitId, dateISO);
+    if (completed && !isDone) {
+      return this.toggleHabitCompletion(habitId, dateISO) === true;
+    } else if (!completed && isDone) {
+      return this.toggleHabitCompletion(habitId, dateISO) === false;
+    }
+    return isDone;
+  },
+
+  /** Check if a habit is scheduled for a given Date or 'YYYY-MM-DD' */
+  isHabitScheduledOn(habit, dateOrISO) {
+    if (!habit) return false;
+    const dateObj = typeof dateOrISO === 'string' ? Dates.parse(dateOrISO) : dateOrISO;
+    if (!dateObj || isNaN(dateObj.getTime())) return false;
+    if (habit.frequency === 'daily') return true;
+    const day = dateObj.getDay();
+    return Array.isArray(habit.targetDays) && habit.targetDays.includes(day);
+  },
+
+  /** Dynamically calculate current and best streaks for a habit */
+  getHabitStreak(habitId) {
+    const habit = this.getHabit(habitId);
+    if (!habit) return { currentStreak: 0, bestStreak: 0 };
+
+    const todayISO = Dates.todayISO();
+    const today = Dates.parse(todayISO);
+    const completions = this.getHabitCompletions(habitId);
+    const completedSet = new Set(completions.map(c => c.date));
+
+    const isSched = (d) => this.isHabitScheduledOn(habit, d);
+
+    // 1. Current Streak calculation:
+    let currentStreak = 0;
+    const todaySched = isSched(today);
+    const todayDone = completedSet.has(todayISO);
+
+    if (todaySched && todayDone) {
+      let count = 1;
+      let offset = 1;
+      while (offset < 1000) {
+        const prev = new Date(today);
+        prev.setDate(today.getDate() - offset);
+        offset++;
+        if (!isSched(prev)) continue;
+        const prevISO = Dates.toISO(prev);
+        if (completedSet.has(prevISO)) {
+          count++;
+        } else {
+          break;
+        }
+      }
+      currentStreak = count;
+    } else {
+      let lastSchedDate = null;
+      let offset = 1;
+      while (offset < 1000) {
+        const prev = new Date(today);
+        prev.setDate(today.getDate() - offset);
+        offset++;
+        if (isSched(prev)) {
+          lastSchedDate = prev;
+          break;
+        }
+      }
+
+      if (lastSchedDate && completedSet.has(Dates.toISO(lastSchedDate))) {
+        let count = 1;
+        while (offset < 1000) {
+          const prev = new Date(today);
+          prev.setDate(today.getDate() - offset);
+          offset++;
+          if (!isSched(prev)) continue;
+          const prevISO = Dates.toISO(prev);
+          if (completedSet.has(prevISO)) {
+            count++;
+          } else {
+            break;
+          }
+        }
+        currentStreak = count;
+      } else {
+        currentStreak = 0;
+      }
+    }
+
+    // 2. Best Streak calculation:
+    let earliestISO = Dates.localDateFromDateTime(habit.createdAt) || todayISO;
+    for (const c of completions) {
+      if (c.date < earliestISO) earliestISO = c.date;
+    }
+    const startDate = Dates.parse(earliestISO) || today;
+
+    let bestStreak = 0;
+    let runningStreak = 0;
+    const cur = new Date(startDate);
+
+    while (cur <= today) {
+      if (isSched(cur)) {
+        const iso = Dates.toISO(cur);
+        if (completedSet.has(iso)) {
+          runningStreak++;
+          if (runningStreak > bestStreak) bestStreak = runningStreak;
+        } else {
+          runningStreak = 0;
+        }
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+
+    if (currentStreak > bestStreak) bestStreak = currentStreak;
+
+    return { currentStreak, bestStreak };
+  },
+
+  /** Weekly status for a habit across the 7 days of the local week */
+  getHabitWeeklyStatus(habitId, weekDays = null) {
+    const habit = this.getHabit(habitId);
+    if (!habit) return [];
+    const days = weekDays || Dates.getWeekDates();
+    const today = Dates.todayISO();
+
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+    return days.map((dateISO, idx) => {
+      const d = Dates.parse(dateISO);
+      const isSched = this.isHabitScheduledOn(habit, d);
+      const isCompleted = this.isHabitCompletedOnDate(habitId, dateISO);
+
+      let status = 'unscheduled';
+      if (isSched) {
+        if (isCompleted) {
+          status = 'completed';
+        } else if (dateISO < today) {
+          status = 'missed';
+        } else if (dateISO === today) {
+          status = 'pending';
+        } else {
+          status = 'future';
+        }
+      }
+
+      return {
+        date: dateISO,
+        dayName: dayLabels[idx],
+        isScheduled: isSched,
+        isCompleted,
+        status
+      };
+    });
+  },
+
+  /** Aggregate habit metrics used across Habits page, Dashboard, Progress & Settings */
+  getHabitStats() {
+    const activeHabits = this.getHabits(false);
+    const today = Dates.todayISO();
+    const todayDate = Dates.parse(today);
+
+    // Habits scheduled for today
+    const scheduledToday = activeHabits.filter(h => this.isHabitScheduledOn(h, todayDate));
+    const completedToday = scheduledToday.filter(h => this.isHabitCompletedOnDate(h.id, today)).length;
+    const totalToday = scheduledToday.length;
+    const rateToday = totalToday > 0 ? Math.round((completedToday / totalToday) * 100) : 0;
+
+    // Habits scheduled this week (Mon-Sun)
+    const weekDays = Dates.getWeekDates(today);
+    let totalWeekScheduled = 0;
+    let totalWeekCompleted = 0;
+
+    for (const h of activeHabits) {
+      for (const dStr of weekDays) {
+        const d = Dates.parse(dStr);
+        if (this.isHabitScheduledOn(h, d)) {
+          totalWeekScheduled++;
+          if (this.isHabitCompletedOnDate(h.id, dStr)) {
+            totalWeekCompleted++;
+          }
+        }
+      }
+    }
+
+    const rateWeek = totalWeekScheduled > 0 ? Math.round((totalWeekCompleted / totalWeekScheduled) * 100) : 0;
+
+    // Best active streak
+    let bestCurrentStreak = 0;
+    for (const h of activeHabits) {
+      const { currentStreak } = this.getHabitStreak(h.id);
+      if (currentStreak > bestCurrentStreak) bestCurrentStreak = currentStreak;
+    }
+
+    return {
+      activeCount: activeHabits.length,
+      totalToday,
+      completedToday,
+      rateToday,
+      totalWeekScheduled,
+      totalWeekCompleted,
+      rateWeek,
+      bestCurrentStreak
+    };
   },
 
   /* =========================== NOTES ==================================== */
@@ -737,6 +1129,10 @@ const Store = {
     const completedTasks = tasks.filter(t => t.completed).length;
     const pinnedNotes = notes.filter(n => n.pinned).length;
 
+    const habits = this.getHabits(true);
+    const activeHabits = habits.filter(h => !h.archived);
+    const habitStats = this.getHabitStats();
+
     return {
       subjectsCount: subjects.length,
       tasksTotal: tasks.length,
@@ -748,6 +1144,9 @@ const Store = {
       focusMinutes: studyStats.totalMinutes,
       focusHours: studyStats.totalHours,
       activityCount: activity.length,
+      habitsTotal: habits.length,
+      habitsActive: activeHabits.length,
+      habitsCompletedToday: habitStats.completedToday,
       lastExportAt: settings.lastExportAt
     };
   },
@@ -763,6 +1162,8 @@ const Store = {
       exportedAt: nowISO,
       subjects: this.getSubjects(),
       tasks: this.getTasks(),
+      habits: this.getHabits(true),
+      habitCompletions: this.getHabitCompletions(),
       notes: this.getNotes(),
       sessions: this.getSessions(),
       activity: this.getActivity(50),
@@ -788,7 +1189,7 @@ const Store = {
       return { valid: false, error: 'Invalid backup file format: root must be a JSON object.' };
     }
 
-    const knownKeys = ['subjects', 'tasks', 'notes', 'sessions', 'activity', 'settings'];
+    const knownKeys = ['subjects', 'tasks', 'habits', 'habitCompletions', 'notes', 'sessions', 'activity', 'settings'];
     const hasKnown = knownKeys.some(k => k in data);
     if (!hasKnown) {
       return { valid: false, error: 'This file does not contain recognized StudyFlow data.' };
@@ -832,6 +1233,54 @@ const Store = {
           completedAt: t.completedAt || ((t.completed === true || t.completed === 'true') ? t.createdAt || new Date().toISOString() : null),
           createdAt: typeof t.createdAt === 'string' ? t.createdAt : new Date().toISOString()
         }));
+    }
+
+    let normalizedHabits = null;
+    if ('habits' in data) {
+      if (!Array.isArray(data.habits)) {
+        return { valid: false, error: 'Malformed backup: "habits" must be a list.' };
+      }
+      normalizedHabits = data.habits
+        .filter(h => h && typeof h === 'object')
+        .map(h => {
+          const targetDays = Array.isArray(h.targetDays)
+            ? h.targetDays.map(Number).filter(d => Number.isInteger(d) && d >= 0 && d <= 6)
+            : [0, 1, 2, 3, 4, 5, 6];
+          return {
+            id: h.id || this.uid(),
+            name: (typeof h.name === 'string' && h.name.trim()) ? h.name.trim().slice(0, 60) : 'Untitled Habit',
+            description: typeof h.description === 'string' ? h.description.trim().slice(0, 200) : '',
+            icon: (typeof h.icon === 'string' && h.icon.trim()) ? h.icon.trim().slice(0, 8) : '⚡',
+            color: this._safeColor(h.color),
+            frequency: h.frequency === 'weekdays' ? 'weekdays' : 'daily',
+            targetDays: h.frequency === 'weekdays' && targetDays.length > 0 ? targetDays : [0, 1, 2, 3, 4, 5, 6],
+            subjectId: typeof h.subjectId === 'string' ? h.subjectId : '',
+            createdAt: (typeof h.createdAt === 'string' && Dates.parse(h.createdAt.slice(0, 10))) ? h.createdAt : new Date().toISOString(),
+            archived: Boolean(h.archived)
+          };
+        });
+    }
+
+    let normalizedHabitCompletions = null;
+    if ('habitCompletions' in data) {
+      if (!Array.isArray(data.habitCompletions)) {
+        return { valid: false, error: 'Malformed backup: "habitCompletions" must be a list.' };
+      }
+      const seen = new Set();
+      normalizedHabitCompletions = [];
+      for (const c of data.habitCompletions) {
+        if (!c || typeof c !== 'object' || !c.habitId || !c.date) continue;
+        if (!Dates.parse(c.date)) continue;
+        const key = `${c.habitId}_${c.date}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        normalizedHabitCompletions.push({
+          id: c.id || this.uid(),
+          habitId: String(c.habitId),
+          date: String(c.date),
+          completedAt: typeof c.completedAt === 'string' ? c.completedAt : new Date().toISOString()
+        });
+      }
     }
 
     let normalizedNotes = null;
@@ -924,6 +1373,8 @@ const Store = {
       counts: {
         subjects: normalizedSubjects ? normalizedSubjects.length : 0,
         tasks: normalizedTasks ? normalizedTasks.length : 0,
+        habits: normalizedHabits ? normalizedHabits.length : 0,
+        habitCompletions: normalizedHabitCompletions ? normalizedHabitCompletions.length : 0,
         notes: normalizedNotes ? normalizedNotes.length : 0,
         sessions: normalizedSessions ? normalizedSessions.length : 0,
         activity: normalizedActivity ? normalizedActivity.length : 0,
@@ -932,6 +1383,7 @@ const Store = {
       currentCounts: {
         subjects: currentDiag.subjectsCount,
         tasks: currentDiag.tasksTotal,
+        habits: currentDiag.habitsTotal,
         notes: currentDiag.notesTotal,
         sessions: currentDiag.sessionsCount,
         activity: currentDiag.activityCount
@@ -940,6 +1392,8 @@ const Store = {
         version: data.version || '2.0.0',
         subjects: normalizedSubjects,
         tasks: normalizedTasks,
+        habits: normalizedHabits,
+        habitCompletions: normalizedHabitCompletions,
         notes: normalizedNotes,
         sessions: normalizedSessions,
         activity: normalizedActivity,
@@ -961,6 +1415,12 @@ const Store = {
       if (Array.isArray(normalizedData.tasks)) {
         this._write(this.KEYS.tasks, normalizedData.tasks);
       }
+      if (Array.isArray(normalizedData.habits)) {
+        this._write(this.KEYS.habits, normalizedData.habits);
+      }
+      if (Array.isArray(normalizedData.habitCompletions)) {
+        this._write(this.KEYS.habitCompletions, normalizedData.habitCompletions);
+      }
       if (Array.isArray(normalizedData.notes)) {
         this._write(this.KEYS.notes, normalizedData.notes);
       }
@@ -981,10 +1441,11 @@ const Store = {
       const counts = {
         subjects: (normalizedData.subjects || []).length,
         tasks: (normalizedData.tasks || []).length,
+        habits: (normalizedData.habits || []).length,
         notes: (normalizedData.notes || []).length,
         sessions: (normalizedData.sessions || []).length
       };
-      this.logActivity('backup_import', `Restored backup (${counts.tasks} tasks, ${counts.subjects} subjects, ${counts.notes} notes)`);
+      this.logActivity('backup_import', `Restored backup (${counts.tasks} tasks, ${counts.habits} habits, ${counts.subjects} subjects, ${counts.notes} notes)`);
 
       return { success: true, counts };
     } catch (e) {
@@ -1009,7 +1470,7 @@ const Store = {
     // Do not infer "new user" only from the seed marker: older releases and
     // hand-restored data may have valid sp_* records without it. Seeding in
     // that state would replace a user's existing planner.
-    const dataKeys = [this.KEYS.subjects, this.KEYS.tasks, this.KEYS.notes, this.KEYS.sessions, this.KEYS.activity, this.KEYS.settings];
+    const dataKeys = [this.KEYS.subjects, this.KEYS.tasks, this.KEYS.habits, this.KEYS.habitCompletions, this.KEYS.notes, this.KEYS.sessions, this.KEYS.activity, this.KEYS.settings];
     if (dataKeys.some(key => localStorage.getItem(key) !== null)) {
       localStorage.setItem(this.KEYS.seeded, '1');
       return;
@@ -1048,8 +1509,24 @@ const Store = {
       { id: 'act3', type: 'note_create', title: 'Created note "Integration techniques"', timestamp: new Date(Date.now() - 3600000 * 24).toISOString(), meta: {} }
     ];
 
+    const habits = [
+      { id: 'h1', name: 'Review class notes', description: 'Quick 15-minute daily recall after lectures', icon: '📝', color: '#7c3aed', frequency: 'daily', targetDays: [0, 1, 2, 3, 4, 5, 6], subjectId: 's1', createdAt: Dates.offsetISO(-14), archived: false },
+      { id: 'h2', name: 'Practice coding', description: 'Solve 1 algorithmic or programming problem', icon: '💻', color: '#2563eb', frequency: 'weekdays', targetDays: [1, 3, 5], subjectId: 's2', createdAt: Dates.offsetISO(-14), archived: false },
+      { id: 'h3', name: 'Read textbook chapter', description: 'Active reading with margin annotations', icon: '📖', color: '#0d9488', frequency: 'daily', targetDays: [0, 1, 2, 3, 4, 5, 6], subjectId: 's3', createdAt: Dates.offsetISO(-10), archived: false },
+      { id: 'h4', name: 'Revise before bed', description: '5-minute reflection on key concepts learned today', icon: '🌙', color: '#db2777', frequency: 'daily', targetDays: [0, 1, 2, 3, 4, 5, 6], subjectId: '', createdAt: Dates.offsetISO(-7), archived: false }
+    ];
+
+    const habitCompletions = [
+      { id: 'hc1', habitId: 'h1', date: Dates.offsetISO(-2), completedAt: new Date(Date.now() - 86400000 * 2).toISOString() },
+      { id: 'hc2', habitId: 'h1', date: Dates.offsetISO(-1), completedAt: new Date(Date.now() - 86400000).toISOString() },
+      { id: 'hc3', habitId: 'h1', date: Dates.todayISO(),    completedAt: new Date().toISOString() },
+      { id: 'hc4', habitId: 'h3', date: Dates.offsetISO(-1), completedAt: new Date(Date.now() - 86400000).toISOString() }
+    ];
+
     this._write(this.KEYS.subjects, subjects);
     this._write(this.KEYS.tasks, tasks);
+    this._write(this.KEYS.habits, habits);
+    this._write(this.KEYS.habitCompletions, habitCompletions);
     this._write(this.KEYS.notes, notes);
     this._write(this.KEYS.sessions, sessions);
     this._write(this.KEYS.activity, activity);

@@ -43,6 +43,7 @@
         <li><a href="../index.html" data-nav="dashboard">Dashboard</a></li>
         <li><a href="subjects.html" data-nav="subjects">Subjects</a></li>
         <li><a href="tasks.html" data-nav="tasks">Tasks</a></li>
+        <li><a href="habits.html" data-nav="habits">Habits</a></li>
         <li><a href="calendar.html" data-nav="calendar">Calendar</a></li>
         <li><a href="timer.html" data-nav="timer">Focus Timer</a></li>
         <li><a href="progress.html" data-nav="progress">Progress</a></li>
@@ -241,6 +242,11 @@
             <span class="diagnostics-sub" id="diagTasksSub">Active & completed</span>
           </div>
           <div class="diagnostics-tile">
+            <span class="diagnostics-num" id="diagHabits">—</span>
+            <span class="diagnostics-label">Habits</span>
+            <span class="diagnostics-sub" id="diagHabitsSub">Daily routines</span>
+          </div>
+          <div class="diagnostics-tile">
             <span class="diagnostics-num" id="diagNotes">—</span>
             <span class="diagnostics-label">Notes</span>
             <span class="diagnostics-sub" id="diagNotesSub">Knowledge entries</span>
@@ -351,7 +357,7 @@
         <div class="settings-row" style="padding-top:0">
           <div class="settings-row__info">
             <div class="settings-row__title">Load Starter Demo Data</div>
-            <div class="settings-row__desc">Replaces your current planner records with starter example subjects, tasks, and notes.</div>
+            <div class="settings-row__desc">Replaces your current planner records with starter example subjects, tasks, habits, and notes.</div>
           </div>
           <button type="button" class="btn btn-ghost" id="reloadDemoBtn">
             Load Starter Demo Data
@@ -361,7 +367,7 @@
         <div class="settings-row" style="border-bottom:none">
           <div class="settings-row__info">
             <div class="settings-row__title" style="color:var(--danger)">Reset All Data</div>
-            <div class="settings-row__desc">Permanently removes all tasks, subjects, notes, sessions, activity history, and settings from this browser. The app will open clean and empty without automatic reseeding.</div>
+            <div class="settings-row__desc">Permanently removes all tasks, habits, subjects, notes, sessions, activity history, and settings from this browser. The app will open clean and empty without automatic reseeding.</div>
           </div>
           <button type="button" class="btn btn-danger" id="clearAllBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>

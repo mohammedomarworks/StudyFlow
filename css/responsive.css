@@ -11,6 +11,7 @@
   .dash-grid { grid-template-columns: 1fr; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .analytics-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .habit-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .timer-view-grid { grid-template-columns: 1fr; }
 }
 
@@ -80,6 +81,9 @@
   /* Settings at tablet */
   .shortcuts-grid { grid-template-columns: 1fr; }
   .diagnostics-grid { grid-template-columns: repeat(2, 1fr); }
+
+  /* Habits at tablet */
+  .habit-cards-grid { grid-template-columns: 1fr; }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
@@ -155,6 +159,15 @@
   .note-card { padding: var(--space-4); min-height: auto; }
   .note-detail-modal { max-height: 94vh; }
   .note-detail-title { font-size: var(--fs-xl); }
+
+  /* Habits phone layout */
+  .habit-summary-grid { grid-template-columns: 1fr; }
+  .habit-card { padding: var(--space-3); }
+  .habit-card__top { flex-wrap: wrap; }
+  .habit-card__check-wrap { width: 100%; display: flex; justify-content: flex-end; padding-top: var(--space-2); border-top: 1px solid var(--border); }
+  .habit-check-btn { width: 100%; justify-content: center; }
+  .habit-week-strip { gap: 2px; }
+  .week-dot { width: 20px; height: 20px; font-size: 0.65rem; }
 }
 
 /* ---- <= 375px : small phones -------------------------------------------- */
@@ -166,6 +179,12 @@
   .timer-circle-wrap svg { max-width: min(210px, 68vw); }
   .trend-chart-bars { min-width: 320px; }
   .range-btn { flex: 1 1 calc(50% - 4px); }
+
+  /* Habits small phone adjustments */
+  .habit-card__title { font-size: var(--fs-sm); }
+  .habit-summary-value { font-size: var(--fs-xl); }
+  .habit-card__actions { flex-wrap: wrap; }
+  .habit-card__actions .btn { flex: 1; min-width: 80px; }
 
   /* Calendar small phone adjustments */
   .cal-card { padding: var(--space-2); }

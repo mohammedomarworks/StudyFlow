@@ -154,6 +154,7 @@ function renderAllAnalytics(rangeKey) {
   renderConsistencyAndPattern(snapshot, bounds);
   renderSubjectStudyDistribution(snapshot, bounds);
   renderWorkloadVsFocus(snapshot, bounds);
+  renderHabitAnalytics(snapshot, bounds);
   renderSubjectAcademicProgress(snapshot);
   renderPriorityBreakdown(snapshot);
   renderProductivityInsights(snapshot, bounds);
@@ -531,7 +532,177 @@ function renderWorkloadVsFocus(snapshot) {
 }
 
 /* ==========================================================================
-   6. Subject Academic Progress
+   6. Habit Consistency & Performance Analysis
+   ========================================================================== */
+function renderHabitAnalytics(snapshot, bounds) {
+  const habits = Store.getHabits(false); // active habits
+  const today = Dates.todayISO();
+  const todayDate = Dates.parse(today);
+
+  const overviewBox = App.qs('#habitConsistencyContent');
+  const performanceBox = App.qs('#habitPerformanceList');
+  const perfBadge = App.qs('#habitPerformanceBadge');
+  if (!overviewBox || !performanceBox) return;
+
+  if (perfBadge) {
+    perfBadge.textContent = `${habits.length} Active`;
+  }
+
+  if (!habits.length) {
+    overviewBox.innerHTML = `
+      <div class="text-center" style="padding:var(--space-5) var(--space-2)">
+        <span style="font-size:2rem; display:block; margin-bottom:var(--space-2)">⚡</span>
+        <p class="text-muted" style="margin-bottom:var(--space-3); font-size:var(--fs-sm)">No active habits found. Establish daily routines to reinforce your study habits.</p>
+        <a href="habits.html" class="btn btn-primary btn-sm">+ Create Your First Habit</a>
+      </div>`;
+    performanceBox.innerHTML = `<p class="text-muted text-center" style="padding:var(--space-5) 0">Add habits on the Habits page to track individual consistency and streaks.</p>`;
+    return;
+  }
+
+  // Determine days in scope up to today
+  let daysInScope = [];
+  if (bounds.days && bounds.days.length) {
+    daysInScope = bounds.days.filter(d => d <= today);
+  } else {
+    // 'all' time: find earliest habit creation or completion date
+    let earliest = today;
+    for (const h of habits) {
+      const cDate = (h.createdAt || '').slice(0, 10);
+      if (cDate && cDate < earliest) earliest = cDate;
+      const completions = Store.getHabitCompletions(h.id);
+      for (const c of completions) {
+        if (c.date < earliest) earliest = c.date;
+      }
+    }
+    const cur = Dates.parse(earliest) || todayDate;
+    const diffDays = Math.min(90, Math.max(1, Math.round((todayDate - cur) / 86400000) + 1));
+    const start = new Date(todayDate);
+    start.setDate(todayDate.getDate() - (diffDays - 1));
+    for (let i = 0; i < diffDays; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      daysInScope.push(Dates.toISO(d));
+    }
+  }
+
+  if (!daysInScope.length) daysInScope = [today];
+
+  // Aggregate across active habits
+  let totalPeriodScheduled = 0;
+  let totalPeriodCompleted = 0;
+  let bestCurrentStreak = 0;
+
+  const habitMetrics = habits.map(habit => {
+    const completions = Store.getHabitCompletions(habit.id);
+    const compSet = new Set(completions.map(c => c.date));
+    const { currentStreak, bestStreak } = Store.getHabitStreak(habit.id);
+    if (currentStreak > bestCurrentStreak) bestCurrentStreak = currentStreak;
+
+    let schedCount = 0;
+    let doneCount = 0;
+
+    for (const dateISO of daysInScope) {
+      const dObj = Dates.parse(dateISO);
+      if (Store.isHabitScheduledOn(habit, dObj)) {
+        schedCount++;
+        if (compSet.has(dateISO)) {
+          doneCount++;
+        }
+      }
+    }
+
+    const rate = schedCount > 0 ? Math.round((doneCount / schedCount) * 100) : 0;
+    const subject = habit.subjectId ? Store.getSubject(habit.subjectId) : null;
+
+    totalPeriodScheduled += schedCount;
+    totalPeriodCompleted += doneCount;
+
+    return {
+      habit,
+      subject,
+      schedCount,
+      doneCount,
+      rate,
+      currentStreak,
+      bestStreak
+    };
+  });
+
+  const overallRate = totalPeriodScheduled > 0 ? Math.round((totalPeriodCompleted / totalPeriodScheduled) * 100) : 0;
+
+  // Scheduled today
+  const schedToday = habits.filter(h => Store.isHabitScheduledOn(h, todayDate));
+  const doneToday = schedToday.filter(h => Store.isHabitCompletedOnDate(h.id, today)).length;
+
+  // Render Overview Box
+  overviewBox.innerHTML = `
+    <div class="habit-analytics-summary" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:var(--space-3); margin-bottom:var(--space-4)">
+      <div class="mini-stat-card" style="background:var(--surface-2); padding:var(--space-3); border-radius:var(--radius-sm); border:1px solid var(--border)">
+        <span class="text-muted" style="font-size:var(--fs-xs); text-transform:uppercase; font-weight:600">Period Consistency</span>
+        <div style="font-size:var(--fs-xl); font-weight:800; color:var(--text); margin-top:2px">${overallRate}%</div>
+        <small class="text-muted" style="font-size:0.75rem">${totalPeriodCompleted} / ${totalPeriodScheduled} scheduled done</small>
+      </div>
+      <div class="mini-stat-card" style="background:var(--surface-2); padding:var(--space-3); border-radius:var(--radius-sm); border:1px solid var(--border)">
+        <span class="text-muted" style="font-size:var(--fs-xs); text-transform:uppercase; font-weight:600">Active Habits</span>
+        <div style="font-size:var(--fs-xl); font-weight:800; color:var(--text); margin-top:2px">${habits.length}</div>
+        <small class="text-muted" style="font-size:0.75rem">Routines tracked</small>
+      </div>
+      <div class="mini-stat-card" style="background:var(--surface-2); padding:var(--space-3); border-radius:var(--radius-sm); border:1px solid var(--border)">
+        <span class="text-muted" style="font-size:var(--fs-xs); text-transform:uppercase; font-weight:600">Top Active Streak</span>
+        <div style="font-size:var(--fs-xl); font-weight:800; color:var(--text); margin-top:2px">🔥 ${bestCurrentStreak}d</div>
+        <small class="text-muted" style="font-size:0.75rem">Days unbroken</small>
+      </div>
+      <div class="mini-stat-card" style="background:var(--surface-2); padding:var(--space-3); border-radius:var(--radius-sm); border:1px solid var(--border)">
+        <span class="text-muted" style="font-size:var(--fs-xs); text-transform:uppercase; font-weight:600">Today's Habits</span>
+        <div style="font-size:var(--fs-xl); font-weight:800; color:var(--text); margin-top:2px">${doneToday} / ${schedToday.length}</div>
+        <small class="text-muted" style="font-size:0.75rem">${schedToday.length > 0 && doneToday === schedToday.length ? 'All done today! 🎉' : 'Scheduled today'}</small>
+      </div>
+    </div>
+    <p class="text-muted mb-0" style="font-size:var(--fs-xs); line-height:1.4">
+      Consistency measures how reliably you complete habits on their designated days in <b>${App.escapeHtml(bounds.label)}</b>.
+    </p>`;
+
+  // Render Performance List
+  performanceBox.innerHTML = habitMetrics.map(item => {
+    const h = item.habit;
+    const freqLabel = h.frequency === 'daily'
+      ? 'Daily'
+      : (Array.isArray(h.targetDays) && h.targetDays.length === 5 && !h.targetDays.includes(0) && !h.targetDays.includes(6))
+        ? 'Weekdays'
+        : 'Custom';
+
+    return `
+      <div class="progress-row" style="margin-bottom:var(--space-4)">
+        <div class="progress-row__top flex-between align-center">
+          <div class="flex-center gap-2">
+            <span style="font-size:1.1rem; line-height:1">${h.icon || '⚡'}</span>
+            <span class="font-bold" style="color:var(--text)">${App.escapeHtml(h.name)}</span>
+            ${item.subject ? `<span class="badge" style="background:${item.subject.color}15; color:${item.subject.color}; border:1px solid ${item.subject.color}40; font-size:0.68rem">${App.escapeHtml(item.subject.name)}</span>` : ''}
+          </div>
+          <div class="flex-center gap-2">
+            <span class="badge ${item.currentStreak > 0 ? 'badge-primary' : 'badge-muted'}" style="font-size:0.7rem">🔥 ${item.currentStreak}d</span>
+            <span class="text-muted" style="font-size:var(--fs-xs)">${item.doneCount}/${item.schedCount} (${item.rate}%)</span>
+          </div>
+        </div>
+        <div class="bar">
+          <div class="bar__fill" data-pct="${item.rate}" style="width:0; background:${h.color || 'var(--primary)'}"></div>
+        </div>
+        <div class="flex-between mt-1 text-muted" style="font-size:var(--fs-xs)">
+          <span>${freqLabel} · Best: ${item.bestStreak}d streak</span>
+          <span>${item.rate >= 80 ? '🌟 High Consistency' : item.rate >= 50 ? '👍 Good Progress' : '⚡ Needs Focus'}</span>
+        </div>
+      </div>`;
+  }).join('');
+
+  requestAnimationFrame(() => {
+    App.qsa('#habitPerformanceList .bar__fill').forEach(el => {
+      el.style.width = el.dataset.pct + '%';
+    });
+  });
+}
+
+/* ==========================================================================
+   7. Subject Academic Progress
    ========================================================================== */
 function renderSubjectAcademicProgress() {
   const subjects = Store.getSubjectProgress();
@@ -701,6 +872,24 @@ function renderProductivityInsights(snapshot, bounds) {
     });
   }
 
+  // 5. Habit Consistency & Streaks
+  const habitStats = Store.getHabitStats();
+  if (habitStats.activeCount > 0) {
+    if (habitStats.bestCurrentStreak >= 3) {
+      insights.push({
+        icon: '⚡',
+        title: 'Strong Habit Momentum',
+        desc: `You have an active <b>${habitStats.bestCurrentStreak}-day habit streak</b> across your daily routines. Keep up the consistency!`
+      });
+    } else if (habitStats.rateToday === 100 && habitStats.totalToday > 0) {
+      insights.push({
+        icon: '⚡',
+        title: 'All Habits Complete Today',
+        desc: `You completed all <b>${habitStats.totalToday}</b> of your scheduled habits for today. Outstanding discipline!`
+      });
+    }
+  }
+
   // If no sessions or tasks yet
   if (!insights.length) {
     insights.push({
@@ -721,7 +910,7 @@ function renderProductivityInsights(snapshot, bounds) {
 }
 
 /* ==========================================================================
-   9. Chronological Activity Timeline
+   10. Chronological Activity Timeline
    ========================================================================== */
 function renderActivityTimeline() {
   const activities = Store.getActivity(20);
@@ -746,7 +935,10 @@ function renderActivityTimeline() {
     note_create: '📝',
     note_delete: '🗑️',
     subject_create: '📚',
-    subject_delete: '🗑️'
+    subject_delete: '🗑️',
+    habit_complete: '⚡',
+    habit_create: '🎯',
+    habit_archive: '📦'
   };
 
   box.innerHTML = activities.map(a => {

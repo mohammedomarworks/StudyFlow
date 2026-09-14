@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function renderAllDashboardData() {
   renderStats();
   renderFocusCard();
+  renderDashboardHabits();
   renderProgressRing();
   renderTodayTasks();
   renderUpcomingTasks();
@@ -104,6 +105,79 @@ function renderFocusCard() {
         <a href="pages/timer.html" class="btn btn-primary btn-sm">Start Focus</a>
       </div>`;
   }
+}
+
+/* ---- Today's Habits Summary --------------------------------------------- */
+function renderDashboardHabits() {
+  const container = App.qs('#dashHabitsContent');
+  if (!container) return;
+
+  const todayISO = Dates.todayISO();
+  const todayDate = Dates.parse(todayISO);
+  const activeHabits = Store.getHabits(false);
+  const scheduledToday = activeHabits.filter(h => Store.isHabitScheduledOn(h, todayDate));
+  const stats = Store.getHabitStats();
+
+  const badge = App.qs('#dashHabitsBadge');
+  if (badge) {
+    badge.textContent = `${stats.completedToday}/${stats.totalToday} Done`;
+  }
+
+  if (activeHabits.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state py-3" style="padding:var(--space-3) 0">
+        <p class="text-muted" style="font-size:var(--fs-sm)">No habits created yet.</p>
+        <a href="pages/habits.html?action=new" class="btn btn-ghost btn-sm mt-2">+ Create a Habit</a>
+      </div>`;
+    return;
+  }
+
+  if (scheduledToday.length === 0) {
+    container.innerHTML = `
+      <div class="p-3 text-center text-muted" style="font-size:var(--fs-xs)">
+        No habits scheduled for today. Enjoy your rest day or review your habits!
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="dash-habit-list">
+      ${scheduledToday.map(h => {
+        const isDone = Store.isHabitCompletedOnDate(h.id, todayISO);
+        const { currentStreak } = Store.getHabitStreak(h.id);
+        const subj = Store.getSubject(h.subjectId);
+        return `
+          <label class="dash-habit-item ${isDone ? 'is-done' : ''}" style="cursor:pointer">
+            <input type="checkbox" class="check" data-toggle-dash-habit="${h.id}" ${isDone ? 'checked' : ''} aria-label="Mark ${App.escapeHtml(h.name)} completed today" />
+            <div class="dash-habit-icon" style="background:${h.color}; color:#fff">
+              ${App.escapeHtml(h.icon || '⚡')}
+            </div>
+            <div class="dash-habit-main">
+              <div class="dash-habit-title">${App.escapeHtml(h.name)}</div>
+              <div class="dash-habit-sub">
+                ${subj ? `<span style="color:${subj.color}">● ${App.escapeHtml(subj.name)}</span>` : ''}
+                <span>🔥 ${currentStreak}d streak</span>
+              </div>
+            </div>
+            <span class="badge ${isDone ? 'badge-primary' : 'badge-muted'}" style="font-size:0.65rem">
+              ${isDone ? 'Done' : 'Pending'}
+            </span>
+          </label>`;
+      }).join('')}
+    </div>
+    <div class="flex-between align-center mt-3 pt-2" style="border-top:1px solid var(--border)">
+      <small class="text-muted">${stats.rateToday}% completed today</small>
+      <a href="pages/habits.html" class="btn btn-ghost btn-sm">Manage Habits →</a>
+    </div>`;
+
+  // Bind inline toggles
+  App.qsa('[data-toggle-dash-habit]', container).forEach(cb => {
+    cb.addEventListener('change', () => {
+      const isDone = Store.toggleHabitCompletion(cb.dataset.toggleDashHabit, todayISO);
+      if (isDone) App.playChime('finish');
+      renderAllDashboardData();
+    });
+  });
 }
 
 /* ---- Animated progress ring (completion rate) ---------------------------- */
@@ -291,7 +365,10 @@ function renderActivity() {
     task_delete: '🗑️',
     session_finish: '⏱️',
     note_create: '📝',
-    subject_create: '📚'
+    subject_create: '📚',
+    habit_complete: '⚡',
+    habit_create: '🎯',
+    habit_archive: '📦'
   };
 
   box.innerHTML = activities.map(a => `

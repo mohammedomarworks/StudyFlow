@@ -180,6 +180,8 @@ function renderDiagnostics() {
   const elSubj = App.qs('#diagSubjects');
   const elTasks = App.qs('#diagTasks');
   const elTasksSub = App.qs('#diagTasksSub');
+  const elHabits = App.qs('#diagHabits');
+  const elHabitsSub = App.qs('#diagHabitsSub');
   const elNotes = App.qs('#diagNotes');
   const elNotesSub = App.qs('#diagNotesSub');
   const elSessions = App.qs('#diagSessions');
@@ -190,6 +192,8 @@ function renderDiagnostics() {
   if (elSubj) elSubj.textContent = diag.subjectsCount;
   if (elTasks) elTasks.textContent = diag.tasksTotal;
   if (elTasksSub) elTasksSub.textContent = `${diag.tasksActive} active · ${diag.tasksCompleted} done`;
+  if (elHabits) elHabits.textContent = diag.habitsTotal;
+  if (elHabitsSub) elHabitsSub.textContent = `${diag.habitsActive} active · ${diag.habitsCompletedToday} done today`;
   if (elNotes) elNotes.textContent = diag.notesTotal;
   if (elNotesSub) elNotesSub.textContent = `${diag.notesPinned} pinned`;
   if (elSessions) elSessions.textContent = diag.sessionsCount;
@@ -305,6 +309,7 @@ function openImportPreview(validation) {
     const rows = [
       { label: 'Subjects', curr: validation.currentCounts.subjects, inc: validation.counts.subjects },
       { label: 'Tasks', curr: validation.currentCounts.tasks, inc: validation.counts.tasks },
+      { label: 'Habits', curr: validation.currentCounts.habits, inc: validation.counts.habits },
       { label: 'Notes', curr: validation.currentCounts.notes, inc: validation.counts.notes },
       { label: 'Focus Sessions', curr: validation.currentCounts.sessions, inc: validation.counts.sessions },
       { label: 'Activity Events', curr: validation.currentCounts.activity, inc: validation.counts.activity },
@@ -331,7 +336,7 @@ function bindDangerControls() {
   App.qs('#reloadDemoBtn').addEventListener('click', () => {
     App.confirm({
       title: 'Load starter demo data?',
-      message: 'This will replace your current planner records with starter example subjects, tasks, and notes.',
+      message: 'This will replace your current planner records with starter example subjects, tasks, habits, and notes.',
       confirmText: 'Load Demo Data',
       danger: true,
       onConfirm: () => {
@@ -346,7 +351,7 @@ function bindDangerControls() {
   App.qs('#clearAllBtn').addEventListener('click', () => {
     App.confirm({
       title: 'Reset all StudyFlow data?',
-      message: 'This will permanently remove your tasks, subjects, notes, sessions, activity history, and settings from this browser. The app will open clean and empty without automatic reseeding.',
+      message: 'This will permanently remove your tasks, habits, subjects, notes, sessions, activity history, and settings from this browser. The app will open clean and empty without automatic reseeding.',
       confirmText: 'Yes, Delete Everything',
       danger: true,
       onConfirm: () => {

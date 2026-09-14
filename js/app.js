@@ -266,6 +266,7 @@ const App = {
           <p>Quick jump to anything in your study planner</p>
           <div class="search-quick-links mt-3">
             <a href="${this.path('tasks.html')}" class="search-chip">📋 All Tasks</a>
+            <a href="${this.path('habits.html')}" class="search-chip">⚡ Habits</a>
             <a href="${this.path('subjects.html')}" class="search-chip">📚 Subjects</a>
             <a href="${this.path('calendar.html')}" class="search-chip">📅 Calendar</a>
             <a href="${this.path('timer.html')}" class="search-chip">⏱️ Focus Timer</a>
@@ -278,10 +279,16 @@ const App = {
 
     const q = query.toLowerCase();
     const tasks = Store.getTasks().filter(t => t.title.toLowerCase().includes(q) || t.notes.toLowerCase().includes(q));
+    const habits = Store.getHabits(true).filter(h => {
+      const subj = Store.getSubject(h.subjectId);
+      return h.name.toLowerCase().includes(q) ||
+             h.description.toLowerCase().includes(q) ||
+             (subj && subj.name.toLowerCase().includes(q));
+    });
     const subjects = Store.getSubjects().filter(s => s.name.toLowerCase().includes(q) || (s.teacher && s.teacher.toLowerCase().includes(q)));
     const notes = Store.getNotes().filter(n => n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q));
 
-    const total = tasks.length + subjects.length + notes.length;
+    const total = tasks.length + habits.length + subjects.length + notes.length;
     if (total === 0) {
       box.innerHTML = `<div class="search-empty-hint">No matches found for "<b>${this.escapeHtml(query)}</b>"</div>`;
       return;
@@ -304,6 +311,30 @@ const App = {
               </div>
             </div>
             <span class="badge badge-muted priority-${t.priority}">● ${t.priority}</span>
+          </a>`;
+      });
+    }
+
+    if (habits.length > 0) {
+      html += `<div class="search-group-title">Habits (${habits.length})</div>`;
+      habits.slice(0, 4).forEach(h => {
+        const subj = Store.getSubject(h.subjectId);
+        const streak = Store.getHabitStreak(h.id);
+        const todayDone = Store.isHabitCompletedOnDate(h.id, Dates.todayISO());
+        const freqText = h.frequency === 'daily' ? 'Daily' : 'Specific Days';
+        html += `
+          <a href="${this.path('habits.html')}?focus=${encodeURIComponent(h.id)}" class="search-result-item">
+            <span class="search-item__icon" style="background:${h.color};color:#fff;border-radius:6px;width:24px;height:24px;display:grid;place-items:center;font-size:13px">
+              ${this.escapeHtml(h.icon || '⚡')}
+            </span>
+            <div class="search-item__info">
+              <div class="search-item__title">${this.escapeHtml(h.name)}</div>
+              <div class="search-item__sub">
+                ${subj ? `<span style="color:${subj.color}">● ${this.escapeHtml(subj.name)}</span> · ` : ''}
+                ${freqText} · 🔥 ${streak.currentStreak} streak
+              </div>
+            </div>
+            <span class="badge ${todayDone ? 'badge-primary' : 'badge-muted'}">${todayDone ? '✓ Done' : (h.archived ? 'Archived' : 'Pending')}</span>
           </a>`;
       });
     }

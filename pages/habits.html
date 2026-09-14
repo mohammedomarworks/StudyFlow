@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudyFlow — Habits</title>
+  <meta name="description" content="Build consistent daily study routines, track streaks, and maintain academic momentum." />
+  <script>
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('sp_settings') || '{}');
+        var pref = s.theme || 'system';
+        var actual = pref === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+        document.documentElement.setAttribute('data-theme', actual);
+        if (s.preferences && s.preferences.motion === 'reduce') {
+          document.documentElement.setAttribute('data-reduced-motion', 'reduce');
+        }
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="../css/variables.css" />
+  <link rel="stylesheet" href="../css/base.css" />
+  <link rel="stylesheet" href="../css/components.css" />
+  <link rel="stylesheet" href="../css/pages.css" />
+  <link rel="stylesheet" href="../css/responsive.css" />
+</head>
+
+<body data-page="habits">
+
+  <!-- ===================== NAVBAR ===================== -->
+  <nav class="navbar">
+    <div class="navbar__inner">
+      <a href="../index.html" class="brand" aria-label="StudyFlow Home">
+        <span class="brand__mark">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5Z" /><path d="M6 12v5c0 1 2 3 6 3s6-2 6-3v-5" /></svg>
+        </span>
+        <span>Study<b>Flow</b></span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="../index.html" data-nav="dashboard">Dashboard</a></li>
+        <li><a href="subjects.html" data-nav="subjects">Subjects</a></li>
+        <li><a href="tasks.html" data-nav="tasks">Tasks</a></li>
+        <li><a href="habits.html" data-nav="habits">Habits</a></li>
+        <li><a href="calendar.html" data-nav="calendar">Calendar</a></li>
+        <li><a href="timer.html" data-nav="timer">Focus Timer</a></li>
+        <li><a href="progress.html" data-nav="progress">Progress</a></li>
+        <li><a href="notes.html" data-nav="notes">Notes</a></li>
+        <li><a href="settings.html" data-nav="settings">Settings</a></li>
+        <li><a href="about.html" data-nav="about">About</a></li>
+      </ul>
+      <div class="nav-actions">
+        <button class="nav-search-btn" aria-label="Search StudyFlow (Cmd+K)" title="Search (Cmd+K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span>Search</span>
+          <kbd>⌘K</kbd>
+        </button>
+        <button class="theme-toggle" aria-label="Toggle theme" title="Toggle theme">
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></svg>
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
+        </button>
+        <button class="nav-toggle" aria-label="Open menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18" /></svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===================== MAIN ===================== -->
+  <main class="page">
+    <div class="container">
+
+      <!-- Header & Add Button -->
+      <div class="page-header flex-between wrap gap-4 mb-5">
+        <div>
+          <h1>Habit Tracker</h1>
+          <p>Maintain consistent academic study routines, check off daily habits, and build lasting streaks.</p>
+        </div>
+        <button class="btn btn-primary" id="addHabitBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+          New Habit
+        </button>
+      </div>
+
+      <!-- Top Summary Metrics Grid -->
+      <section class="habit-summary-grid mb-6" id="habitSummaryGrid" aria-label="Habit summary metrics">
+        <!-- 1. Today's Progress -->
+        <div class="card habit-summary-card" id="todaySummaryCard">
+          <div class="habit-summary-head">
+            <span class="habit-summary-label">Today's Habits</span>
+            <div class="stat-card__icon purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>
+            </div>
+          </div>
+          <div class="habit-summary-value" id="todayProgressVal">0 / 0</div>
+          <div class="habit-progress-bar-wrap mt-2">
+            <div class="habit-progress-bar" id="todayProgressBar" style="width:0%"></div>
+          </div>
+          <div class="habit-summary-sub mt-2" id="todayProgressSub">0% completed today</div>
+        </div>
+
+        <!-- 2. Current Streak Leader -->
+        <div class="card habit-summary-card" id="streakLeaderCard">
+          <div class="habit-summary-head">
+            <span class="habit-summary-label">Top Active Streak</span>
+            <div class="stat-card__icon orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+            </div>
+          </div>
+          <div class="habit-summary-value" id="topStreakVal">0 days</div>
+          <div class="habit-summary-sub" id="topStreakSub">No active habits</div>
+        </div>
+
+        <!-- 3. Weekly Completion Rate -->
+        <div class="card habit-summary-card" id="weeklyRateCard">
+          <div class="habit-summary-head">
+            <span class="habit-summary-label">Weekly Consistency</span>
+            <div class="stat-card__icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            </div>
+          </div>
+          <div class="habit-summary-value" id="weeklyRateVal">0%</div>
+          <div class="habit-summary-sub" id="weeklyRateSub">0 of 0 scheduled this week</div>
+        </div>
+
+        <!-- 4. Total Active Habits -->
+        <div class="card habit-summary-card" id="activeHabitsCard">
+          <div class="habit-summary-head">
+            <span class="habit-summary-label">Active Habits</span>
+            <div class="stat-card__icon blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </div>
+          </div>
+          <div class="habit-summary-value" id="activeHabitsVal">0</div>
+          <div class="habit-summary-sub" id="activeHabitsSub">0 archived</div>
+        </div>
+      </section>
+
+      <!-- Status Tabs: Active vs. Archived -->
+      <div class="task-tabs mb-4" id="habitTabs" role="tablist" aria-label="Habit status tabs">
+        <button type="button" class="tab-btn active" data-tab="active" role="tab" aria-selected="true">
+          Active Habits <span class="tab-count" id="activeTabCount">0</span>
+        </button>
+        <button type="button" class="tab-btn" data-tab="archived" role="tab" aria-selected="false">
+          Archived <span class="tab-count" id="archivedTabCount">0</span>
+        </button>
+      </div>
+
+      <!-- Toolbar: search · filter by frequency · filter by subject -->
+      <div class="toolbar mb-5">
+        <div class="search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>
+          <input class="input" id="habitSearchInput" type="search" placeholder="Search habits by name or description…" />
+        </div>
+        <select class="select" id="filterFrequency" aria-label="Filter by frequency">
+          <option value="all">All Frequencies</option>
+          <option value="daily">Daily</option>
+          <option value="weekdays">Specific Weekdays</option>
+        </select>
+        <select class="select" id="filterSubject" aria-label="Filter by subject">
+          <option value="all">All Subjects</option>
+        </select>
+      </div>
+
+      <!-- Habits Grid / List Container -->
+      <div id="habitsContainer" class="habit-cards-grid mb-6">
+        <!-- Injected dynamically by habits.js -->
+      </div>
+
+      <!-- 30-Day Consistency History Section -->
+      <section class="card mb-6" id="historySection">
+        <div class="card__head flex-between wrap gap-2">
+          <div>
+            <h2 class="card__title">30-Day Consistency History</h2>
+            <small class="text-muted">Review completion consistency for all active habits over the past 30 days.</small>
+          </div>
+          <span class="badge badge-muted" id="historyRangeBadge">Recent 30 Days</span>
+        </div>
+        <div class="habit-history-wrap mt-3" id="historyContent">
+          <!-- Injected dynamically by habits.js -->
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- ===================== HABIT CREATE / EDIT MODAL ===================== -->
+  <div class="modal-overlay" id="habitModal" role="dialog" aria-modal="true" aria-labelledby="habitModalTitle">
+    <div class="modal" style="max-width:540px">
+      <div class="modal__head">
+        <h3 id="habitModalTitle">New Habit</h3>
+        <button class="icon-btn" data-close aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <form id="habitForm" novalidate>
+        <input type="hidden" id="habitEditId" value="" />
+        <div class="modal__body">
+          <!-- Habit Name -->
+          <div class="field" id="hf-name">
+            <label for="habitName">Habit Name <span class="req">*</span></label>
+            <input class="input" id="habitName" maxlength="60" placeholder="e.g. Review class notes" required />
+            <div class="field-error">Please enter a habit name (at least 2 characters).</div>
+          </div>
+
+          <!-- Description -->
+          <div class="field">
+            <label for="habitDesc">Description / Goal</label>
+            <textarea class="textarea" id="habitDesc" maxlength="200" rows="2" placeholder="e.g. 15 minutes of recall after lecture…"></textarea>
+          </div>
+
+          <!-- Optional Subject -->
+          <div class="field">
+            <label for="habitSubject">Associated Subject</label>
+            <select class="select" id="habitSubject">
+              <option value="">— General (No subject) —</option>
+            </select>
+          </div>
+
+          <!-- Icon / Emoji Picker -->
+          <div class="field">
+            <label>Habit Icon / Emoji</label>
+            <div class="habit-icon-picker">
+              <div class="habit-emoji-presets" id="emojiPresets">
+                <!-- Preset emoji buttons -->
+              </div>
+              <div class="flex align-center gap-2 mt-2">
+                <input class="input" id="habitCustomIcon" maxlength="8" style="max-width:120px;text-align:center;font-size:1.2rem" placeholder="Custom" />
+                <small class="text-muted">Choose a preset or enter any emoji</small>
+              </div>
+            </div>
+          </div>
+
+          <!-- Color Swatches -->
+          <div class="field">
+            <label>Color Tag</label>
+            <div class="swatches" id="habitColorSwatches"></div>
+          </div>
+
+          <!-- Frequency Options -->
+          <div class="field">
+            <label>Frequency Schedule</label>
+            <div class="flex gap-4 mt-1">
+              <label class="radio-label">
+                <input type="radio" name="habitFreq" value="daily" checked />
+                <span>Every Day (Daily)</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="habitFreq" value="weekdays" />
+                <span>Specific Weekdays</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Target Days Selector (Shown when Specific Weekdays selected) -->
+          <div class="field" id="weekdayPickerField" style="display:none">
+            <label>Select Scheduled Days</label>
+            <div class="habit-weekday-picker" id="weekdayPicker">
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="1" checked />
+                <span>Mon</span>
+              </label>
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="2" />
+                <span>Tue</span>
+              </label>
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="3" checked />
+                <span>Wed</span>
+              </label>
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="4" />
+                <span>Thu</span>
+              </label>
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="5" checked />
+                <span>Fri</span>
+              </label>
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="6" />
+                <span>Sat</span>
+              </label>
+              <label class="day-chip">
+                <input type="checkbox" name="targetDay" value="0" />
+                <span>Sun</span>
+              </label>
+            </div>
+            <div class="field-error" id="weekdayError" style="display:none">Please select at least one day.</div>
+          </div>
+        </div>
+
+        <div class="modal__foot">
+          <button type="button" class="btn btn-ghost" data-close>Cancel</button>
+          <button type="submit" class="btn btn-primary" id="saveHabitBtn">Save Habit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer">
+    Made with <b>StudyFlow</b> · Your data stays private in your browser · © <span data-year></span>
+  </footer>
+
+  <!-- Scripts: storage → shell → page logic -->
+  <script src="../js/storage.js"></script>
+  <script src="../js/app.js"></script>
+  <script src="../js/habits.js"></script>
+</body>
+</html>
