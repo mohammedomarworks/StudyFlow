@@ -165,10 +165,43 @@ const Store = {
     'Other'
   ],
 
+  /* ---- storage mode & cloud cache routing (Phase C) ------------------ */
+  _getActiveKey(baseKey) {
+    try {
+      const repoModule = typeof window !== 'undefined'
+        ? window.StudyFlowRepository
+        : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+      if (repoModule && repoModule.RepositoryFactory) {
+        const rf = repoModule.RepositoryFactory;
+        if (rf.getMode() === 'cloud' && rf.getActiveUserId()) {
+          return `sp_cloud_${baseKey}_${rf.getActiveUserId()}`;
+        }
+      }
+    } catch (e) {}
+    return baseKey;
+  },
+
+  _syncCloud(action, ...args) {
+    try {
+      const repoModule = typeof window !== 'undefined'
+        ? window.StudyFlowRepository
+        : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+      if (repoModule && repoModule.RepositoryFactory && repoModule.RepositoryFactory.getMode() === 'cloud') {
+        const cloudRepo = repoModule.RepositoryFactory.getActive();
+        if (cloudRepo && typeof cloudRepo[action] === 'function') {
+          cloudRepo[action](...args).catch(err => {
+            console.warn(`StudyFlow background cloud sync error (${action}):`, err);
+          });
+        }
+      }
+    } catch (e) {}
+  },
+
   /* ---- low-level read / write (with safe JSON parsing) ----------------- */
   _read(key, fallback) {
     try {
-      const raw = localStorage.getItem(key);
+      const activeKey = this._getActiveKey(key);
+      const raw = localStorage.getItem(activeKey);
       return raw ? JSON.parse(raw) : fallback;
     } catch {
       return fallback;   // corrupted value → fall back gracefully
@@ -176,14 +209,25 @@ const Store = {
   },
   _write(key, value) {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const activeKey = this._getActiveKey(key);
+      localStorage.setItem(activeKey, JSON.stringify(value));
     } catch (e) {
       console.error('StudyFlow Store write error:', e);
     }
   },
 
-  /** Short unique id (timestamp + random) */
+  /** Short unique id (timestamp + random, or UUID in cloud mode) */
   uid() {
+    try {
+      const repoModule = typeof window !== 'undefined'
+        ? window.StudyFlowRepository
+        : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+      if (repoModule && repoModule.RepositoryFactory && repoModule.RepositoryFactory.getMode() === 'cloud') {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+          return crypto.randomUUID();
+        }
+      }
+    } catch (e) {}
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   },
 
@@ -259,6 +303,7 @@ const Store = {
       this.logActivity('subject_create', `Created subject "${data.name}"`, { subjectId: data.id });
     }
     this._write(this.KEYS.subjects, subjects);
+    this._syncCloud('saveSubject', data);
     return data;
   },
 
@@ -283,6 +328,7 @@ const Store = {
     if (subj) {
       this.logActivity('subject_delete', `Deleted subject "${subj.name}"`);
     }
+    this._syncCloud('deleteSubject', id);
   },
 
   /* =========================== TASKS ==================================== */
@@ -325,6 +371,7 @@ const Store = {
       this.logActivity('task_create', `Added task "${data.title}"`, { taskId: data.id, priority: data.priority });
     }
     this._write(this.KEYS.tasks, tasks);
+    this._syncCloud('saveTask', data);
     return data;
   },
 
@@ -334,6 +381,7 @@ const Store = {
     if (task) {
       this.logActivity('task_delete', `Deleted task "${task.title}"`);
     }
+    this._syncCloud('deleteTask', id);
   },
 
   /** Flip a task's completed flag; returns the new state */
@@ -349,6 +397,7 @@ const Store = {
     if (t.completed) {
       this.logActivity('task_complete', `Completed "${t.title}"`, { taskId: t.id });
     }
+    this._syncCloud('toggleTask', id);
     return t.completed;
   },
 
@@ -420,6 +469,7 @@ const Store = {
       }
     }
     this._write(this.KEYS.habits, habits);
+    this._syncCloud('saveHabit', saved);
     return saved;
   },
 
@@ -430,6 +480,7 @@ const Store = {
     h.archived = true;
     this._write(this.KEYS.habits, habits);
     this.logActivity('habit_archive', `Archived habit "${h.name}"`, { habitId: h.id });
+    this._syncCloud('archiveHabit', id);
     return true;
   },
 
@@ -440,6 +491,7 @@ const Store = {
     h.archived = false;
     this._write(this.KEYS.habits, habits);
     this.logActivity('habit_create', `Restored habit "${h.name}"`, { habitId: h.id });
+    this._syncCloud('restoreHabit', id);
     return true;
   },
 
@@ -454,6 +506,7 @@ const Store = {
     if (habit) {
       this.logActivity('habit_archive', `Deleted habit "${habit.name}"`);
     }
+    this._syncCloud('deleteHabit', id);
     return true;
   },
 
@@ -498,6 +551,7 @@ const Store = {
     if (existingIdx > -1) {
       completions.splice(existingIdx, 1);
       this._write(this.KEYS.habitCompletions, completions);
+      this._syncCloud('toggleHabitCompletion', habitId, dateISO);
       return false;
     } else {
       const entry = {
@@ -512,6 +566,7 @@ const Store = {
       if (habit) {
         this.logActivity('habit_complete', `Completed habit "${habit.name}"`, { habitId, date: dateISO });
       }
+      this._syncCloud('toggleHabitCompletion', habitId, dateISO);
       return true;
     }
   },
@@ -523,9 +578,13 @@ const Store = {
     if (dateISO > today) return false;
     const isDone = this.isHabitCompletedOnDate(habitId, dateISO);
     if (completed && !isDone) {
-      return this.toggleHabitCompletion(habitId, dateISO) === true;
+      const res = this.toggleHabitCompletion(habitId, dateISO) === true;
+      this._syncCloud('setHabitCompletion', habitId, dateISO, true);
+      return res;
     } else if (!completed && isDone) {
-      return this.toggleHabitCompletion(habitId, dateISO) === false;
+      const res = this.toggleHabitCompletion(habitId, dateISO) === false;
+      this._syncCloud('setHabitCompletion', habitId, dateISO, false);
+      return res;
     }
     return isDone;
   },
@@ -762,6 +821,7 @@ const Store = {
       this.logActivity('note_create', `Created note "${data.title}"`, { noteId: data.id });
     }
     this._write(this.KEYS.notes, notes);
+    this._syncCloud('saveNote', data);
     return data;
   },
 
@@ -771,6 +831,7 @@ const Store = {
     if (!note) return false;
     note.pinned = !note.pinned;
     this._write(this.KEYS.notes, notes);
+    this._syncCloud('togglePinNote', id);
     return note.pinned;
   },
 
@@ -780,6 +841,7 @@ const Store = {
     if (note) {
       this.logActivity('note_delete', `Deleted note "${note.title}"`);
     }
+    this._syncCloud('deleteNote', id);
   },
 
   /* ======================= STUDY SESSIONS =============================== */
@@ -812,6 +874,7 @@ const Store = {
       if (i > -1) sessions[i] = { ...sessions[i], ...data };
     }
     this._write(this.KEYS.sessions, sessions);
+    this._syncCloud('saveSession', data);
 
     if (data.type === 'focus') {
       const subj = this.getSubject(data.subjectId);
@@ -830,6 +893,7 @@ const Store = {
 
   deleteSession(id) {
     this._write(this.KEYS.sessions, this.getSessions().filter(s => s.id !== id));
+    this._syncCloud('deleteSession', id);
   },
 
   getStudyStats() {
@@ -1044,6 +1108,7 @@ const Store = {
       merged.preferences = { ...current.preferences, ...newSettings.preferences };
     }
     this._write(this.KEYS.settings, merged);
+    this._syncCloud('saveSettings', merged);
     return merged;
   },
 
@@ -1465,6 +1530,14 @@ const Store = {
   /* ======================= SEED (first run) ============================= */
   /** Populate friendly example data the first time the app is opened */
   seedIfEmpty() {
+    try {
+      const repoModule = typeof window !== 'undefined'
+        ? window.StudyFlowRepository
+        : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+      if (repoModule && repoModule.RepositoryFactory && repoModule.RepositoryFactory.getMode() === 'cloud') {
+        return;
+      }
+    } catch (e) {}
     if (localStorage.getItem(this.KEYS.seeded)) return;
 
     // Do not infer "new user" only from the seed marker: older releases and

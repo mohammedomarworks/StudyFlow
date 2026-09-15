@@ -1,8 +1,8 @@
 # StudyFlow v2.0 Architecture & Supabase Foundation
 
-> **Current Status**: Phase A — Supabase Foundation  
-> **Target Release**: StudyFlow v2.0  
-> **Stable Release**: StudyFlow v1.5.0  
+> **Current Status**: Phase C — Local Data Migration & Cloud CRUD
+> **Target Release**: StudyFlow v2.0
+> **Stable Release**: StudyFlow v1.5.0
 > **Active Git Branch**: `feature/v2-foundation`
 
 ---
@@ -25,11 +25,14 @@ StudyFlow v2.0 introduces optional cloud synchronization, multi-device access, a
 ┌─────────────────────────────────────────────────────────┐
 │                   Store API                             │
 │        (js/storage.js — Stable v1.5.0 interface)        │
+│    • In Local mode: reads/writes raw sp_* keys          │
+│    • In Cloud mode: reads/writes isolated sp_cloud_*    │
+│      cache and syncs asynchronously to CloudRepository  │
 └───────────────────────────┬─────────────────────────────┘
                             │
                             ▼
 ┌─────────────────────────────────────────────────────────┐
-│              Repository Abstraction                     │
+│              Repository Boundary                        │
 │                (js/repository.js)                       │
 │  ┌────────────────────────┴──────────────────────────┐  │
 │  ▼                                                   ▼  │
@@ -42,28 +45,28 @@ StudyFlow v2.0 introduces optional cloud synchronization, multi-device access, a
                                               ▼
                                ┌────────────────────────┐
                                │     Supabase Cloud     │
-                               │  ├── Auth              │
+                               │  ├── Auth (Phase B)    │
                                │  ├── PostgreSQL (RLS)  │
-                               │  └── Realtime          │
+                               │  └── Realtime (Phase D)│
                                └────────────────────────┘
 ```
 
-### Phase A Scope & Guarantees
+### Phase Scope & Guarantees
 
-In **Phase A**, only the foundational backend and abstraction layers are created:
-- Database schema migrations and Row Level Security (RLS) policies.
-- Defense-in-depth foreign key ownership constraints and triggers.
-- Browser Supabase client singleton with configuration validation and secret-key rejection.
-- Static configuration approach for GitHub Pages.
-- Repository boundary definitions (`LocalRepository` and `CloudRepository` stub).
-- Automated test suites (Node.js schema/client tests and pgTAP RLS tests).
-- Connectivity verification helper.
+- **Phase A (Foundation)**: Supabase PostgreSQL schema, Row Level Security, foreign key ownership constraints, safe client config.
+- **Phase B (Authentication)**: Supabase Auth integration, sign up, sign in, password recovery, accessible navbar auth chip, and settings account card.
+- **Phase C (Migration & Cloud CRUD)**:
+  - **CloudRepository**: Full async CRUD implementation for Subjects, Tasks, Notes, Habits, Habit Completions, Study Sessions, and Settings.
+  - **Migration Service (`js/migration.js`)**: Explicit user-controlled migration with preview modal, progress updates, foreign key mapping (String IDs -> UUIDs), and idempotent retry.
+  - **Zero Data Loss Guarantee (`LOGOUT != DELETE LOCAL DATA`)**: Local planner `localStorage` keys (`sp_*`) are NEVER deleted, cleared, or overwritten during migration, in cloud mode, or on logout.
+  - **Cache Isolation**: Cloud data caches in `sp_cloud_${key}_${userId}`, leaving local `sp_*` 100% intact.
+  - **Unauthenticated & Unmigrated Users**: 100% v1.5.0 local behavior with zero disruption.
 
-**Critical Non-Goals in Phase A**:
-- **Zero modification to v1.5.0 business logic**: Task, Subject, Notes, Habits, Calendar, Timer, and Progress pages remain 100% functional via `localStorage`.
-- **No authentication UI**: Login, signup, password reset, and account screens are deferred to Phase B.
-- **No cloud CRUD**: Network persistence of tasks and subjects is deferred to Phase C.
-- **No realtime sync or notifications**: Live websockets are deferred to Phase D.
+**Critical Non-Goals in Phase C**:
+- **No Realtime subscriptions**: Live multi-tab / multi-device websockets are deferred to Phase D.
+- **No push notifications**.
+- **No automatic migration without user consent**.
+- **No framework migration**: Pure vanilla HTML/CSS/JavaScript.
 
 ---
 
@@ -312,14 +315,27 @@ If configuration is omitted or the Supabase SDK is not loaded:
 
 ---
 
-## 5. Repository Abstraction Boundary
+## 5. Repository Abstraction & Migration Architecture
 
-Located in [`js/repository.js`](file:///Users/omar/study-planner/js/repository.js), this boundary defines how future versions will interact with storage:
+Located in [`js/repository.js`](file:///Users/omar/study-planner/js/repository.js) and [`js/migration.js`](file:///Users/omar/study-planner/js/migration.js):
 
 - `BaseRepository`: Abstract interface defining CRUD operations for subjects, tasks, notes, habits, completions, sessions, activity, and settings.
 - `LocalRepository`: Direct wrapper over the existing `Store` API (`js/storage.js`).
-- `CloudRepository`: Stub for Phase C that defines all asynchronous signatures and rejects calls with an informative message.
-- `RepositoryFactory`: Returns the active repository instance (`'local'` by default).
+- `CloudRepository`: Supabase PostgREST client implementation providing asynchronous CRUD for all 7 entities, schema mappers (snake_case <-> camelCase), and cache hydration into `sp_cloud_*_${userId}`.
+- `RepositoryFactory`: Singleton that dynamically exposes `getActive()`, manages mode transitions (`'local'` vs `'cloud'`), and notifies subscribed UI components.
+- `StudyFlowMigration`: Migration engine supporting `getLocalSummary()`, `preview()`, `migrate()`, `getStatus()`, and `reset()`.
+
+### Referential Integrity & ID Mapping
+
+- Local IDs (e.g. `'s1'`, `'t1'`) are mapped to persistent PostgreSQL UUIDs via `generateUUID()`.
+- ID mappings are cached per-user in `sp_migration_map_${userId}` to ensure idempotent retry and prevent duplicate records in cloud tables.
+- Foreign keys (`tasks.subject_id`, `notes.subject_id`, `habits.subject_id`, `habit_completions.habit_id`, `study_sessions.subject_id`, `study_sessions.task_id`) are mapped before insertion in strict dependency order.
+
+### Zero Data Loss Guarantees
+
+- `localStorage` keys `sp_*` are NEVER cleared, deleted, or overwritten during migration, in cloud mode, or on logout.
+- In Cloud Mode, temporary cache reads/writes are routed to isolated keys `sp_cloud_${entity}_${userId}`.
+- Users can toggle between Cloud Mode and a read-only Local Backup View at any time from Settings.
 
 ---
 
@@ -365,13 +381,23 @@ When connecting a new Supabase project:
    node tests/habits.test.js
    ```
    Verifies all 11 local storage habit test cases.
-3. **JavaScript Syntax Check**:
+3. **Application Regression Suite**:
+   ```bash
+   node tests/app-regression.test.js
+   ```
+   Verifies all HTML pages and script references.
+4. **Authentication Suite (Phase B)**:
+   ```bash
+   node tests/auth.test.js
+   ```
+   Verifies 12 authentication workflows, validation, and logout safety.
+5. **Migration & Cloud CRUD Suite (Phase C)**:
+   ```bash
+   node tests/migration.test.js
+   ```
+   Verifies 10 migration, CloudRepository CRUD, idempotency, and isolation test cases.
+6. **JavaScript Syntax Check**:
    ```bash
    node -c js/*.js
    ```
    Validates syntax across all JavaScript files.
-4. **Supabase pgTAP Tests** (when Supabase CLI is installed):
-   ```bash
-   supabase test db
-   ```
-   Runs [`supabase/tests/0001_rls_and_schema.test.sql`](file:///Users/omar/study-planner/supabase/tests/0001_rls_and_schema.test.sql) inside local Postgres.

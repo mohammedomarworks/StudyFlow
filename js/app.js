@@ -601,6 +601,22 @@ const App = {
     }
 
     const renderAuthNav = (event, session, user, state) => {
+      const repoModule = window.StudyFlowRepository;
+      const migrationModule = window.StudyFlowMigration;
+
+      if (repoModule && repoModule.RepositoryFactory) {
+        if (user && state === 'authenticated') {
+          const isMigrated = migrationModule ? migrationModule.isCompleted(user.id) : false;
+          if (isMigrated) {
+            repoModule.RepositoryFactory.setMode('cloud', user.id);
+          } else {
+            repoModule.RepositoryFactory.setMode('local');
+          }
+        } else {
+          repoModule.RepositoryFactory.setMode('local');
+        }
+      }
+
       if (!window.Auth) {
         navAuth.innerHTML = '';
         return;
@@ -612,6 +628,7 @@ const App = {
         const displayName = user.displayName || 'Student';
         const initials = (displayName.charAt(0) || 'S').toUpperCase();
         const settingsUrl = this.path('pages/settings.html') + '#sectionAccount';
+        const isCloudMode = repoModule && repoModule.RepositoryFactory && repoModule.RepositoryFactory.getMode() === 'cloud';
 
         navAuth.innerHTML = `
           <div class="nav-user-menu" id="navUserMenu">
@@ -624,6 +641,9 @@ const App = {
               <div class="dropdown-header">
                 <div class="dropdown-name">${this.escapeHtml(displayName)}</div>
                 <div class="dropdown-email text-muted">${this.escapeHtml(user.email || '')}</div>
+                <span class="badge ${isCloudMode ? 'badge-success' : 'badge-muted'}" style="font-size:0.65rem;margin-top:4px;display:inline-block">
+                  ${isCloudMode ? 'Cloud Mode' : 'Local Mode'}
+                </span>
               </div>
               <div class="dropdown-divider"></div>
               <a href="${settingsUrl}" class="dropdown-item" role="menuitem">
@@ -655,6 +675,9 @@ const App = {
             e.stopPropagation();
             if (userMenu) userMenu.classList.remove('open');
             if (userBtn) userBtn.setAttribute('aria-expanded', 'false');
+            if (repoModule && repoModule.RepositoryFactory) {
+              repoModule.RepositoryFactory.setMode('local');
+            }
             await window.Auth.signOut();
             this.toast('Signed out. Local planner data remains safe.', 'info');
           });

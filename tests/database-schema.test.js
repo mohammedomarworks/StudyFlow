@@ -369,10 +369,10 @@ runTest('12. StudyFlowRepository provides LocalRepository & CloudRepository boun
   const cloudRepo = RepositoryFactory.getRepository('cloud');
   assert.ok(cloudRepo instanceof CloudRepository);
 
-  // CloudRepository methods should reject with Phase C message
+  // CloudRepository methods should reject when unauthenticated or unconfigured
   await assert.rejects(
     () => cloudRepo.getTasks(),
-    /CloudRepository\.getTasks will be implemented in Phase C/
+    /(User is not authenticated|Supabase client is not initialized)/
   );
 });
 
