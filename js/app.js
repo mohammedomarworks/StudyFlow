@@ -680,6 +680,11 @@ const App = {
                 await window.StudyFlowRealtime.destroy();
               } catch {}
             }
+            if (window.StudyFlowSyncQueue) {
+              try {
+                window.StudyFlowSyncQueue.destroy();
+              } catch {}
+            }
             if (repoModule && repoModule.RepositoryFactory) {
               repoModule.RepositoryFactory.setMode('local');
             }
@@ -813,6 +818,32 @@ const App = {
     });
   },
 
+  /* ==================== OFFLINE RESILIENCE & SYNC ===================== */
+  initOfflineSync() {
+    // Toast on network status transitions
+    window.addEventListener('online', () => {
+      this.toast('Connection restored. Syncing pending changes...', 'success');
+    });
+
+    window.addEventListener('offline', () => {
+      this.toast('Offline mode. Changes will be saved locally and synced when reconnected.', 'info');
+    });
+
+    // Reactive UI refresh on sync changes
+    window.addEventListener('studyflow:sync-change', (e) => {
+      const detail = e.detail || {};
+      try {
+        if (typeof renderSyncStatus === 'function') {
+          renderSyncStatus(detail);
+        } else if (typeof renderDiagnostics === 'function') {
+          renderDiagnostics();
+        }
+      } catch (rErr) {
+        console.warn('StudyFlow reactive sync refresh notice:', rErr);
+      }
+    });
+  },
+
   /* ========================= INIT ===================================== */
   init() {
     this.initThemeListener();
@@ -821,6 +852,7 @@ const App = {
     this.initGlobalSearch();
     this.initAuthNav();
     this.initRealtimeSync();
+    this.initOfflineSync();
 
     // Global Escape closes any open modal
     document.addEventListener('keydown', e => {

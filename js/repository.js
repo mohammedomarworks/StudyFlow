@@ -139,6 +139,10 @@
     async saveSettings(settings) { return this._getStore().saveSettings(settings); }
   }
 
+  function isUUID(str) {
+    return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+  }
+
   /**
    * CloudRepository — Supabase PostgreSQL Persistent Implementation (Phase C)
    */
@@ -159,7 +163,61 @@
       throw new Error('Supabase client is not initialized or configured.');
     }
 
+    _isOnline() {
+      if (typeof navigator !== 'undefined' && typeof navigator.onLine === 'boolean') {
+        return navigator.onLine;
+      }
+      return true;
+    }
+
+    _isTransientError(err) {
+      if (!this._isOnline()) return true;
+      if (!err) return false;
+      const message = (err.message || String(err)).toLowerCase();
+      const status = err.status || (err.response && err.response.status) || 0;
+      if (message.includes('not initialized or configured')) return false;
+      return (
+        message.includes('fetch failed') ||
+        message.includes('failed to fetch') ||
+        message.includes('network') ||
+        message.includes('abort') ||
+        message.includes('timeout') ||
+        status === 0 ||
+        status === 408 ||
+        status === 429 ||
+        (status >= 500 && status <= 599)
+      );
+    }
+
+    _getSyncQueue() {
+      if (typeof window !== 'undefined' && window.StudyFlowSyncQueue) {
+        return window.StudyFlowSyncQueue;
+      }
+      if (typeof global !== 'undefined' && global.StudyFlowSyncQueue) {
+        return global.StudyFlowSyncQueue;
+      }
+      return null;
+    }
+
+    _readCache(key, userId, fallback = []) {
+      if (typeof localStorage === 'undefined' || !userId) return fallback;
+      try {
+        const raw = localStorage.getItem(`sp_cloud_${key}_${userId}`);
+        return raw ? JSON.parse(raw) : fallback;
+      } catch {
+        return fallback;
+      }
+    }
+
     async _getUser() {
+      if (typeof window !== 'undefined' && window.StudyFlowRepository && window.StudyFlowRepository.RepositoryFactory) {
+        const uid = window.StudyFlowRepository.RepositoryFactory.getActiveUserId();
+        if (uid) return { id: uid };
+      }
+      if (typeof window !== 'undefined' && window.Auth && typeof window.Auth.getUser === 'function') {
+        const u = window.Auth.getUser();
+        if (u && u.id) return u;
+      }
       const client = this._getClient();
       if (!client || !client.auth) {
         throw new Error('Supabase client authentication is not available.');
@@ -370,6 +428,51 @@
       }
     }
 
+    _optimisticSave(key, item, userId) {
+      if (!userId || !item) return;
+      const list = this._readCache(key, userId, []);
+      const idx = item.id ? list.findIndex(e => e.id === item.id) : -1;
+      let next;
+      if (idx !== -1) {
+        next = [...list];
+        next[idx] = { ...next[idx], ...item };
+      } else {
+        next = [...list, item];
+      }
+      this._writeCache(key, next, userId);
+    }
+
+    _optimisticDelete(key, recordId, userId) {
+      if (!userId || !recordId) return;
+      const list = this._readCache(key, userId, []);
+      const next = list.filter(e => e.id !== recordId);
+      this._writeCache(key, next, userId);
+    }
+
+    _optimisticSetHabitCompletion(habitId, date, completed, userId) {
+      if (!userId || !habitId || !date) return;
+      const list = this._readCache('sp_habit_completions', userId, []);
+      const exists = list.some(c => (c.habitId === habitId || c.habit_id === habitId) && c.date === date);
+      let next;
+      if (completed) {
+        if (!exists) {
+          next = [...list, { id: 'hc_' + Date.now(), habitId, date, completedAt: new Date().toISOString() }];
+        } else {
+          next = list;
+        }
+      } else {
+        next = list.filter(c => !((c.habitId === habitId || c.habit_id === habitId) && c.date === date));
+      }
+      this._writeCache('sp_habit_completions', next, userId);
+    }
+
+    _optimisticSaveSettings(data, userId) {
+      if (!userId) return;
+      const current = this._readCache('sp_settings', userId, {});
+      const merged = { ...current, ...data };
+      this._writeCache('sp_settings', merged, userId);
+    }
+
     async hydrateCache(userId) {
       if (!userId) {
         const u = await this._getUser();
@@ -401,78 +504,170 @@
     // ========================================================================
     async getSubjects() {
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('subjects')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true });
+      if (!this._isOnline()) {
+        return this._readCache('sp_subjects', user.id, []);
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('subjects')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
 
-      if (error) throw new Error(`Cloud getSubjects error: ${error.message}`);
-      const list = (data || []).map(r => this._fromDbSubject(r));
-      this._writeCache('sp_subjects', list, user.id);
-      return list;
+        if (error) throw new Error(`Cloud getSubjects error: ${error.message}`);
+        const list = (data || []).map(r => this._fromDbSubject(r));
+        this._writeCache('sp_subjects', list, user.id);
+        return list;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          return this._readCache('sp_subjects', user.id, []);
+        }
+        throw err;
+      }
     }
 
     async getSubject(id) {
       if (!id) return null;
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('subjects')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (!this._isOnline()) {
+        const cached = this._readCache('sp_subjects', user.id, []);
+        return Array.isArray(cached) ? (cached.find(s => s.id === id) || null) : null;
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('subjects')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (error) throw new Error(`Cloud getSubject error: ${error.message}`);
-      return this._fromDbSubject(data);
+        if (error) throw new Error(`Cloud getSubject error: ${error.message}`);
+        return this._fromDbSubject(data);
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          const cached = this._readCache('sp_subjects', user.id, []);
+          return Array.isArray(cached) ? (cached.find(s => s.id === id) || null) : null;
+        }
+        throw err;
+      }
     }
 
-    async saveSubject(data) {
-      const user = await this._getUser();
-      const client = this._getClient();
-      const payload = this._toDbSubject(data, user.id);
+    async saveSubject(data, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      let savedRow;
-      if (data.id && typeof data.id === 'string' && data.id.includes('-')) {
-        // Update existing UUID record
-        const { data: updated, error } = await client
-          .from('subjects')
-          .update(payload)
-          .eq('id', data.id)
-          .eq('user_id', user.id)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveSubject update error: ${error.message}`);
-        savedRow = updated;
-      } else {
-        // Insert new record
-        const { data: inserted, error } = await client
-          .from('subjects')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveSubject insert error: ${error.message}`);
-        savedRow = inserted;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'saveSubject',
+            table: 'subjects',
+            recordId: data.id,
+            payload: data
+          });
+          this._optimisticSave('sp_subjects', data, user.id);
+          return data;
+        }
       }
 
-      const normalized = this._fromDbSubject(savedRow);
-      // Refresh cache
-      this.getSubjects().catch(() => {});
-      return normalized;
+      try {
+        const user = await this._getUser();
+        const client = this._getClient();
+        const payload = this._toDbSubject(data, user.id);
+        if (data.id && isUUID(data.id)) {
+          payload.id = data.id;
+        }
+
+        let savedRow;
+        if (payload.id) {
+          const { data: upserted, error } = await client
+            .from('subjects')
+            .upsert(payload, { onConflict: 'id' })
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveSubject update error: ${error.message}`);
+          savedRow = upserted;
+        } else {
+          const { data: inserted, error } = await client
+            .from('subjects')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveSubject insert error: ${error.message}`);
+          savedRow = inserted;
+        }
+
+        const normalized = this._fromDbSubject(savedRow);
+        this.getSubjects().catch(() => {});
+        return normalized;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'saveSubject',
+              table: 'subjects',
+              recordId: data.id,
+              payload: data
+            });
+            this._optimisticSave('sp_subjects', data, user.id);
+            return data;
+          }
+        }
+        throw err;
+      }
     }
 
-    async deleteSubject(id) {
+    async deleteSubject(id, options = {}) {
       if (!id) return false;
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('subjects')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud deleteSubject error: ${error.message}`);
-      this.getSubjects().catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'deleteSubject',
+            table: 'subjects',
+            recordId: id
+          });
+          this._optimisticDelete('sp_subjects', id, user.id);
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('subjects')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud deleteSubject error: ${error.message}`);
+        this.getSubjects().catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'deleteSubject',
+              table: 'subjects',
+              recordId: id
+            });
+            this._optimisticDelete('sp_subjects', id, user.id);
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
     // ========================================================================
@@ -480,97 +675,245 @@
     // ========================================================================
     async getTasks() {
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('tasks')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true });
+      if (!this._isOnline()) {
+        return this._readCache('sp_tasks', user.id, []);
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('tasks')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
 
-      if (error) throw new Error(`Cloud getTasks error: ${error.message}`);
-      const list = (data || []).map(r => this._fromDbTask(r));
-      this._writeCache('sp_tasks', list, user.id);
-      return list;
+        if (error) throw new Error(`Cloud getTasks error: ${error.message}`);
+        const list = (data || []).map(r => this._fromDbTask(r));
+        this._writeCache('sp_tasks', list, user.id);
+        return list;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          return this._readCache('sp_tasks', user.id, []);
+        }
+        throw err;
+      }
     }
 
     async getTask(id) {
       if (!id) return null;
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('tasks')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (!this._isOnline()) {
+        const cached = this._readCache('sp_tasks', user.id, []);
+        return Array.isArray(cached) ? (cached.find(t => t.id === id) || null) : null;
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('tasks')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (error) throw new Error(`Cloud getTask error: ${error.message}`);
-      return this._fromDbTask(data);
+        if (error) throw new Error(`Cloud getTask error: ${error.message}`);
+        return this._fromDbTask(data);
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          const cached = this._readCache('sp_tasks', user.id, []);
+          return Array.isArray(cached) ? (cached.find(t => t.id === id) || null) : null;
+        }
+        throw err;
+      }
     }
 
-    async saveTask(data) {
-      const user = await this._getUser();
-      const client = this._getClient();
-      const payload = this._toDbTask(data, user.id);
+    async saveTask(data, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      let savedRow;
-      if (data.id && typeof data.id === 'string' && data.id.includes('-')) {
-        const { data: updated, error } = await client
-          .from('tasks')
-          .update(payload)
-          .eq('id', data.id)
-          .eq('user_id', user.id)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveTask update error: ${error.message}`);
-        savedRow = updated;
-      } else {
-        const { data: inserted, error } = await client
-          .from('tasks')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveTask insert error: ${error.message}`);
-        savedRow = inserted;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'saveTask',
+            table: 'tasks',
+            recordId: data.id,
+            payload: data
+          });
+          this._optimisticSave('sp_tasks', data, user.id);
+          return data;
+        }
       }
 
-      const normalized = this._fromDbTask(savedRow);
-      this.getTasks().catch(() => {});
-      return normalized;
+      try {
+        const user = await this._getUser();
+        const client = this._getClient();
+        const payload = this._toDbTask(data, user.id);
+        if (data.id && isUUID(data.id)) {
+          payload.id = data.id;
+        }
+
+        let savedRow;
+        if (payload.id) {
+          const { data: upserted, error } = await client
+            .from('tasks')
+            .upsert(payload, { onConflict: 'id' })
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveTask update error: ${error.message}`);
+          savedRow = upserted;
+        } else {
+          const { data: inserted, error } = await client
+            .from('tasks')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveTask insert error: ${error.message}`);
+          savedRow = inserted;
+        }
+
+        const normalized = this._fromDbTask(savedRow);
+        this.getTasks().catch(() => {});
+        return normalized;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'saveTask',
+              table: 'tasks',
+              recordId: data.id,
+              payload: data
+            });
+            this._optimisticSave('sp_tasks', data, user.id);
+            return data;
+          }
+        }
+        throw err;
+      }
     }
 
-    async deleteTask(id) {
+    async deleteTask(id, options = {}) {
       if (!id) return false;
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('tasks')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud deleteTask error: ${error.message}`);
-      this.getTasks().catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'deleteTask',
+            table: 'tasks',
+            recordId: id
+          });
+          this._optimisticDelete('sp_tasks', id, user.id);
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('tasks')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud deleteTask error: ${error.message}`);
+        this.getTasks().catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'deleteTask',
+              table: 'tasks',
+              recordId: id
+            });
+            this._optimisticDelete('sp_tasks', id, user.id);
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
-    async toggleTask(id) {
-      const task = await this.getTask(id);
-      if (!task) return null;
+    async toggleTask(id, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      const newCompleted = !task.completed;
-      const newCompletedAt = newCompleted ? new Date().toISOString() : null;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'toggleTask',
+            table: 'tasks',
+            recordId: id
+          });
+          const cached = this._readCache('sp_tasks', user.id, []);
+          const t = cached.find(x => x.id === id);
+          if (t) {
+            t.completed = !t.completed;
+            t.completedAt = t.completed ? new Date().toISOString() : null;
+            this._writeCache('sp_tasks', cached, user.id);
+            return t.completed;
+          }
+          return true;
+        }
+      }
 
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('tasks')
-        .update({
-          completed: newCompleted,
-          completed_at: newCompletedAt
-        })
-        .eq('id', id)
-        .eq('user_id', user.id);
+      try {
+        let task = await this.getTask(id).catch(() => null);
+        if (!task && RepositoryFactory.getActiveUserId()) {
+          const cached = this._readCache('sp_tasks', RepositoryFactory.getActiveUserId(), []);
+          task = Array.isArray(cached) ? cached.find(t => t.id === id) : null;
+        }
+        if (!task) return null;
 
-      if (error) throw new Error(`Cloud toggleTask error: ${error.message}`);
-      this.getTasks().catch(() => {});
-      return newCompleted;
+        const newCompleted = !task.completed;
+        const newCompletedAt = newCompleted ? new Date().toISOString() : null;
+
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('tasks')
+          .update({
+            completed: newCompleted,
+            completed_at: newCompletedAt
+          })
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud toggleTask error: ${error.message}`);
+        this.getTasks().catch(() => {});
+        return newCompleted;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'toggleTask',
+              table: 'tasks',
+              recordId: id
+            });
+            const cached = this._readCache('sp_tasks', user.id, []);
+            const t = cached.find(x => x.id === id);
+            if (t) {
+              t.completed = !t.completed;
+              t.completedAt = t.completed ? new Date().toISOString() : null;
+              this._writeCache('sp_tasks', cached, user.id);
+              return t.completed;
+            }
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
     // ========================================================================
@@ -578,92 +921,238 @@
     // ========================================================================
     async getNotes() {
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('notes')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
+      if (!this._isOnline()) {
+        return this._readCache('sp_notes', user.id, []);
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('notes')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
-      if (error) throw new Error(`Cloud getNotes error: ${error.message}`);
-      const list = (data || []).map(r => this._fromDbNote(r));
-      this._writeCache('sp_notes', list, user.id);
-      return list;
+        if (error) throw new Error(`Cloud getNotes error: ${error.message}`);
+        const list = (data || []).map(r => this._fromDbNote(r));
+        this._writeCache('sp_notes', list, user.id);
+        return list;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          return this._readCache('sp_notes', user.id, []);
+        }
+        throw err;
+      }
     }
 
     async getNote(id) {
       if (!id) return null;
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('notes')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (!this._isOnline()) {
+        const cached = this._readCache('sp_notes', user.id, []);
+        return Array.isArray(cached) ? (cached.find(n => n.id === id) || null) : null;
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('notes')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (error) throw new Error(`Cloud getNote error: ${error.message}`);
-      return this._fromDbNote(data);
+        if (error) throw new Error(`Cloud getNote error: ${error.message}`);
+        return this._fromDbNote(data);
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          const cached = this._readCache('sp_notes', user.id, []);
+          return Array.isArray(cached) ? (cached.find(n => n.id === id) || null) : null;
+        }
+        throw err;
+      }
     }
 
-    async saveNote(data) {
-      const user = await this._getUser();
-      const client = this._getClient();
-      const payload = this._toDbNote(data, user.id);
+    async saveNote(data, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      let savedRow;
-      if (data.id && typeof data.id === 'string' && data.id.includes('-')) {
-        const { data: updated, error } = await client
-          .from('notes')
-          .update(payload)
-          .eq('id', data.id)
-          .eq('user_id', user.id)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveNote update error: ${error.message}`);
-        savedRow = updated;
-      } else {
-        const { data: inserted, error } = await client
-          .from('notes')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveNote insert error: ${error.message}`);
-        savedRow = inserted;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'saveNote',
+            table: 'notes',
+            recordId: data.id,
+            payload: data
+          });
+          this._optimisticSave('sp_notes', data, user.id);
+          return data;
+        }
       }
 
-      const normalized = this._fromDbNote(savedRow);
-      this.getNotes().catch(() => {});
-      return normalized;
+      try {
+        const user = await this._getUser();
+        const client = this._getClient();
+        const payload = this._toDbNote(data, user.id);
+        if (data.id && isUUID(data.id)) {
+          payload.id = data.id;
+        }
+
+        let savedRow;
+        if (payload.id) {
+          const { data: upserted, error } = await client
+            .from('notes')
+            .upsert(payload, { onConflict: 'id' })
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveNote update error: ${error.message}`);
+          savedRow = upserted;
+        } else {
+          const { data: inserted, error } = await client
+            .from('notes')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveNote insert error: ${error.message}`);
+          savedRow = inserted;
+        }
+
+        const normalized = this._fromDbNote(savedRow);
+        this.getNotes().catch(() => {});
+        return normalized;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'saveNote',
+              table: 'notes',
+              recordId: data.id,
+              payload: data
+            });
+            this._optimisticSave('sp_notes', data, user.id);
+            return data;
+          }
+        }
+        throw err;
+      }
     }
 
-    async deleteNote(id) {
+    async deleteNote(id, options = {}) {
       if (!id) return false;
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('notes')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud deleteNote error: ${error.message}`);
-      this.getNotes().catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'deleteNote',
+            table: 'notes',
+            recordId: id
+          });
+          this._optimisticDelete('sp_notes', id, user.id);
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('notes')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud deleteNote error: ${error.message}`);
+        this.getNotes().catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'deleteNote',
+              table: 'notes',
+              recordId: id
+            });
+            this._optimisticDelete('sp_notes', id, user.id);
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
-    async togglePinNote(id) {
-      const note = await this.getNote(id);
-      if (!note) return false;
+    async togglePinNote(id, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      const newPinned = !note.pinned;
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('notes')
-        .update({ pinned: newPinned })
-        .eq('id', id)
-        .eq('user_id', user.id);
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'togglePinNote',
+            table: 'notes',
+            recordId: id
+          });
+          const cached = this._readCache('sp_notes', user.id, []);
+          const n = cached.find(x => x.id === id);
+          if (n) {
+            n.pinned = !n.pinned;
+            this._writeCache('sp_notes', cached, user.id);
+            return n.pinned;
+          }
+          return true;
+        }
+      }
 
-      if (error) throw new Error(`Cloud togglePinNote error: ${error.message}`);
-      this.getNotes().catch(() => {});
-      return newPinned;
+      try {
+        let note = await this.getNote(id).catch(() => null);
+        if (!note && RepositoryFactory.getActiveUserId()) {
+          const cached = this._readCache('sp_notes', RepositoryFactory.getActiveUserId(), []);
+          note = Array.isArray(cached) ? cached.find(n => n.id === id) : null;
+        }
+        if (!note) return false;
+
+        const newPinned = !note.pinned;
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('notes')
+          .update({ pinned: newPinned })
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud togglePinNote error: ${error.message}`);
+        this.getNotes().catch(() => {});
+        return newPinned;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'togglePinNote',
+              table: 'notes',
+              recordId: id
+            });
+            const cached = this._readCache('sp_notes', user.id, []);
+            const n = cached.find(x => x.id === id);
+            if (n) {
+              n.pinned = !n.pinned;
+              this._writeCache('sp_notes', cached, user.id);
+              return n.pinned;
+            }
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
     // ========================================================================
@@ -671,106 +1160,293 @@
     // ========================================================================
     async getHabits(includeArchived = false) {
       const user = await this._getUser();
-      let query = this._getClient()
-        .from('habits')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: true });
-
-      if (!includeArchived) {
-        query = query.eq('archived', false);
+      if (!this._isOnline()) {
+        const cached = this._readCache('sp_habits', user.id, []);
+        return includeArchived ? cached : (Array.isArray(cached) ? cached.filter(h => !h.archived) : []);
       }
+      try {
+        let query = this._getClient()
+          .from('habits')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: true });
 
-      const { data, error } = await query;
-      if (error) throw new Error(`Cloud getHabits error: ${error.message}`);
-      const list = (data || []).map(r => this._fromDbHabit(r));
-      this._writeCache('sp_habits', list, user.id);
-      return list;
+        if (!includeArchived) {
+          query = query.eq('archived', false);
+        }
+
+        const { data, error } = await query;
+        if (error) throw new Error(`Cloud getHabits error: ${error.message}`);
+        const list = (data || []).map(r => this._fromDbHabit(r));
+        this._writeCache('sp_habits', list, user.id);
+        return list;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          const cached = this._readCache('sp_habits', user.id, []);
+          return includeArchived ? cached : (Array.isArray(cached) ? cached.filter(h => !h.archived) : []);
+        }
+        throw err;
+      }
     }
 
     async getHabit(id) {
       if (!id) return null;
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('habits')
-        .select('*')
-        .eq('id', id)
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (!this._isOnline()) {
+        const cached = this._readCache('sp_habits', user.id, []);
+        return Array.isArray(cached) ? (cached.find(h => h.id === id) || null) : null;
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('habits')
+          .select('*')
+          .eq('id', id)
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (error) throw new Error(`Cloud getHabit error: ${error.message}`);
-      return this._fromDbHabit(data);
+        if (error) throw new Error(`Cloud getHabit error: ${error.message}`);
+        return this._fromDbHabit(data);
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          const cached = this._readCache('sp_habits', user.id, []);
+          return Array.isArray(cached) ? (cached.find(h => h.id === id) || null) : null;
+        }
+        throw err;
+      }
     }
 
-    async saveHabit(data) {
-      const user = await this._getUser();
-      const client = this._getClient();
-      const payload = this._toDbHabit(data, user.id);
+    async saveHabit(data, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      let savedRow;
-      if (data.id && typeof data.id === 'string' && data.id.includes('-')) {
-        const { data: updated, error } = await client
-          .from('habits')
-          .update(payload)
-          .eq('id', data.id)
-          .eq('user_id', user.id)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveHabit update error: ${error.message}`);
-        savedRow = updated;
-      } else {
-        const { data: inserted, error } = await client
-          .from('habits')
-          .insert(payload)
-          .select()
-          .single();
-        if (error) throw new Error(`Cloud saveHabit insert error: ${error.message}`);
-        savedRow = inserted;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'saveHabit',
+            table: 'habits',
+            recordId: data.id,
+            payload: data
+          });
+          this._optimisticSave('sp_habits', data, user.id);
+          return data;
+        }
       }
 
-      const normalized = this._fromDbHabit(savedRow);
-      this.getHabits(true).catch(() => {});
-      return normalized;
+      try {
+        const user = await this._getUser();
+        const client = this._getClient();
+        const payload = this._toDbHabit(data, user.id);
+        if (data.id && isUUID(data.id)) {
+          payload.id = data.id;
+        }
+
+        let savedRow;
+        if (payload.id) {
+          const { data: upserted, error } = await client
+            .from('habits')
+            .upsert(payload, { onConflict: 'id' })
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveHabit update error: ${error.message}`);
+          savedRow = upserted;
+        } else {
+          const { data: inserted, error } = await client
+            .from('habits')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveHabit insert error: ${error.message}`);
+          savedRow = inserted;
+        }
+
+        const normalized = this._fromDbHabit(savedRow);
+        this.getHabits(true).catch(() => {});
+        return normalized;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'saveHabit',
+              table: 'habits',
+              recordId: data.id,
+              payload: data
+            });
+            this._optimisticSave('sp_habits', data, user.id);
+            return data;
+          }
+        }
+        throw err;
+      }
     }
 
-    async archiveHabit(id) {
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('habits')
-        .update({ archived: true })
-        .eq('id', id)
-        .eq('user_id', user.id);
+    async archiveHabit(id, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud archiveHabit error: ${error.message}`);
-      this.getHabits(true).catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'archiveHabit',
+            table: 'habits',
+            recordId: id
+          });
+          const cached = this._readCache('sp_habits', user.id, []);
+          const h = cached.find(x => x.id === id);
+          if (h) {
+            h.archived = true;
+            this._writeCache('sp_habits', cached, user.id);
+          }
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('habits')
+          .update({ archived: true })
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud archiveHabit error: ${error.message}`);
+        this.getHabits(true).catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'archiveHabit',
+              table: 'habits',
+              recordId: id
+            });
+            const cached = this._readCache('sp_habits', user.id, []);
+            const h = cached.find(x => x.id === id);
+            if (h) {
+              h.archived = true;
+              this._writeCache('sp_habits', cached, user.id);
+            }
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
-    async restoreHabit(id) {
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('habits')
-        .update({ archived: false })
-        .eq('id', id)
-        .eq('user_id', user.id);
+    async restoreHabit(id, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud restoreHabit error: ${error.message}`);
-      this.getHabits(true).catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'restoreHabit',
+            table: 'habits',
+            recordId: id
+          });
+          const cached = this._readCache('sp_habits', user.id, []);
+          const h = cached.find(x => x.id === id);
+          if (h) {
+            h.archived = false;
+            this._writeCache('sp_habits', cached, user.id);
+          }
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('habits')
+          .update({ archived: false })
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud restoreHabit error: ${error.message}`);
+        this.getHabits(true).catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'restoreHabit',
+              table: 'habits',
+              recordId: id
+            });
+            const cached = this._readCache('sp_habits', user.id, []);
+            const h = cached.find(x => x.id === id);
+            if (h) {
+              h.archived = false;
+              this._writeCache('sp_habits', cached, user.id);
+            }
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
-    async deleteHabit(id) {
+    async deleteHabit(id, options = {}) {
       if (!id) return false;
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('habits')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud deleteHabit error: ${error.message}`);
-      this.getHabits(true).catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'deleteHabit',
+            table: 'habits',
+            recordId: id
+          });
+          this._optimisticDelete('sp_habits', id, user.id);
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('habits')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud deleteHabit error: ${error.message}`);
+        this.getHabits(true).catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'deleteHabit',
+              table: 'habits',
+              recordId: id
+            });
+            this._optimisticDelete('sp_habits', id, user.id);
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
     // ========================================================================
@@ -778,94 +1454,186 @@
     // ========================================================================
     async getHabitCompletions(habitId = null) {
       const user = await this._getUser();
-      let query = this._getClient()
-        .from('habit_completions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('date', { ascending: true });
-
-      if (habitId) {
-        query = query.eq('habit_id', habitId);
+      if (!this._isOnline()) {
+        const cached = this._readCache('sp_habit_completions', user.id, []);
+        return habitId ? (Array.isArray(cached) ? cached.filter(c => c.habitId === habitId) : []) : cached;
       }
+      try {
+        let query = this._getClient()
+          .from('habit_completions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('date', { ascending: true });
 
-      const { data, error } = await query;
-      if (error) throw new Error(`Cloud getHabitCompletions error: ${error.message}`);
-      const list = (data || []).map(r => this._fromDbCompletion(r));
-      if (!habitId) {
-        this._writeCache('sp_habit_completions', list, user.id);
+        if (habitId) {
+          query = query.eq('habit_id', habitId);
+        }
+
+        const { data, error } = await query;
+        if (error) throw new Error(`Cloud getHabitCompletions error: ${error.message}`);
+        const list = (data || []).map(r => this._fromDbCompletion(r));
+        if (!habitId) {
+          this._writeCache('sp_habit_completions', list, user.id);
+        }
+        return list;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          const cached = this._readCache('sp_habit_completions', user.id, []);
+          return habitId ? (Array.isArray(cached) ? cached.filter(c => c.habitId === habitId) : []) : cached;
+        }
+        throw err;
       }
-      return list;
     }
 
-    async toggleHabitCompletion(habitId, dateISO) {
+    async toggleHabitCompletion(habitId, dateISO, options = {}) {
       if (!habitId || !dateISO) return null;
-      const user = await this._getUser();
-      const client = this._getClient();
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      // Check existing
-      const { data: existing, error: checkErr } = await client
-        .from('habit_completions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('habit_id', habitId)
-        .eq('date', dateISO)
-        .maybeSingle();
-
-      if (checkErr) throw new Error(`Cloud toggleHabitCompletion check error: ${checkErr.message}`);
-
-      if (existing) {
-        // Delete completion
-        const { error: delErr } = await client
-          .from('habit_completions')
-          .delete()
-          .eq('id', existing.id)
-          .eq('user_id', user.id);
-        if (delErr) throw new Error(`Cloud toggleHabitCompletion delete error: ${delErr.message}`);
-        this.getHabitCompletions().catch(() => {});
-        return false;
-      } else {
-        // Insert completion
-        const { error: insErr } = await client
-          .from('habit_completions')
-          .insert({
-            user_id: user.id,
-            habit_id: habitId,
-            date: dateISO,
-            completed_at: new Date().toISOString()
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'toggleHabitCompletion',
+            table: 'habit_completions',
+            recordId: habitId,
+            secondaryId: dateISO
           });
-        if (insErr) throw new Error(`Cloud toggleHabitCompletion insert error: ${insErr.message}`);
-        this.getHabitCompletions().catch(() => {});
-        return true;
+          const cached = this._readCache('sp_habit_completions', user.id, []);
+          const exists = cached.some(c => (c.habitId === habitId || c.habit_id === habitId) && c.date === dateISO);
+          this._optimisticSetHabitCompletion(habitId, dateISO, !exists, user.id);
+          return !exists;
+        }
       }
-    }
 
-    async setHabitCompletion(habitId, dateISO, completed = true) {
-      if (!habitId || !dateISO) return false;
-      const user = await this._getUser();
-      const client = this._getClient();
+      try {
+        const user = await this._getUser();
+        const client = this._getClient();
 
-      if (completed) {
-        const { error } = await client
+        // Check existing
+        const { data: existing, error: checkErr } = await client
           .from('habit_completions')
-          .upsert({
-            user_id: user.id,
-            habit_id: habitId,
-            date: dateISO,
-            completed_at: new Date().toISOString()
-          }, { onConflict: 'habit_id, date' });
-        if (error) throw new Error(`Cloud setHabitCompletion error: ${error.message}`);
-        this.getHabitCompletions().catch(() => {});
-        return true;
-      } else {
-        const { error } = await client
-          .from('habit_completions')
-          .delete()
+          .select('id')
+          .eq('user_id', user.id)
           .eq('habit_id', habitId)
           .eq('date', dateISO)
-          .eq('user_id', user.id);
-        if (error) throw new Error(`Cloud setHabitCompletion error: ${error.message}`);
-        this.getHabitCompletions().catch(() => {});
-        return false;
+          .maybeSingle();
+
+        if (checkErr) throw new Error(`Cloud toggleHabitCompletion check error: ${checkErr.message}`);
+
+        if (existing) {
+          // Delete completion
+          const { error: delErr } = await client
+            .from('habit_completions')
+            .delete()
+            .eq('id', existing.id)
+            .eq('user_id', user.id);
+          if (delErr) throw new Error(`Cloud toggleHabitCompletion delete error: ${delErr.message}`);
+          this.getHabitCompletions().catch(() => {});
+          return false;
+        } else {
+          // Insert completion
+          const { error: insErr } = await client
+            .from('habit_completions')
+            .insert({
+              user_id: user.id,
+              habit_id: habitId,
+              date: dateISO,
+              completed_at: new Date().toISOString()
+            });
+          if (insErr) throw new Error(`Cloud toggleHabitCompletion insert error: ${insErr.message}`);
+          this.getHabitCompletions().catch(() => {});
+          return true;
+        }
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'toggleHabitCompletion',
+              table: 'habit_completions',
+              recordId: habitId,
+              secondaryId: dateISO
+            });
+            const cached = this._readCache('sp_habit_completions', user.id, []);
+            const exists = cached.some(c => (c.habitId === habitId || c.habit_id === habitId) && c.date === dateISO);
+            this._optimisticSetHabitCompletion(habitId, dateISO, !exists, user.id);
+            return !exists;
+          }
+        }
+        throw err;
+      }
+    }
+
+    async setHabitCompletion(habitId, dateISO, completed = true, options = {}) {
+      if (!habitId || !dateISO) return false;
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
+
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'setHabitCompletion',
+            table: 'habit_completions',
+            recordId: habitId,
+            secondaryId: dateISO,
+            payload: { completed }
+          });
+          this._optimisticSetHabitCompletion(habitId, dateISO, completed, user.id);
+          return completed;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const client = this._getClient();
+
+        if (completed) {
+          const { error } = await client
+            .from('habit_completions')
+            .upsert({
+              user_id: user.id,
+              habit_id: habitId,
+              date: dateISO,
+              completed_at: new Date().toISOString()
+            }, { onConflict: 'habit_id, date' });
+          if (error) throw new Error(`Cloud setHabitCompletion error: ${error.message}`);
+          this.getHabitCompletions().catch(() => {});
+          return true;
+        } else {
+          const { error } = await client
+            .from('habit_completions')
+            .delete()
+            .eq('habit_id', habitId)
+            .eq('date', dateISO)
+            .eq('user_id', user.id);
+          if (error) throw new Error(`Cloud setHabitCompletion error: ${error.message}`);
+          this.getHabitCompletions().catch(() => {});
+          return false;
+        }
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'setHabitCompletion',
+              table: 'habit_completions',
+              recordId: habitId,
+              secondaryId: dateISO,
+              payload: { completed }
+            });
+            this._optimisticSetHabitCompletion(habitId, dateISO, completed, user.id);
+            return completed;
+          }
+        }
+        throw err;
       }
     }
 
@@ -874,45 +1642,143 @@
     // ========================================================================
     async getSessions() {
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('study_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('completed_at', { ascending: false });
+      if (!this._isOnline()) {
+        return this._readCache('sp_sessions', user.id, []);
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('study_sessions')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('completed_at', { ascending: false });
 
-      if (error) throw new Error(`Cloud getSessions error: ${error.message}`);
-      const list = (data || []).map(r => this._fromDbSession(r));
-      this._writeCache('sp_sessions', list, user.id);
-      return list;
+        if (error) throw new Error(`Cloud getSessions error: ${error.message}`);
+        const list = (data || []).map(r => this._fromDbSession(r));
+        this._writeCache('sp_sessions', list, user.id);
+        return list;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          return this._readCache('sp_sessions', user.id, []);
+        }
+        throw err;
+      }
     }
 
-    async saveSession(data) {
-      const user = await this._getUser();
-      const payload = this._toDbSession(data, user.id);
-      const { data: inserted, error } = await this._getClient()
-        .from('study_sessions')
-        .insert(payload)
-        .select()
-        .single();
+    async saveSession(data, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud saveSession error: ${error.message}`);
-      const normalized = this._fromDbSession(inserted);
-      this.getSessions().catch(() => {});
-      return normalized;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'saveSession',
+            table: 'study_sessions',
+            recordId: data.id,
+            payload: data
+          });
+          this._optimisticSave('sp_sessions', data, user.id);
+          return data;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const payload = this._toDbSession(data, user.id);
+        if (data.id && isUUID(data.id)) {
+          payload.id = data.id;
+        }
+
+        let savedRow;
+        if (payload.id) {
+          const { data: upserted, error } = await this._getClient()
+            .from('study_sessions')
+            .upsert(payload, { onConflict: 'id' })
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveSession error: ${error.message}`);
+          savedRow = upserted;
+        } else {
+          const { data: inserted, error } = await this._getClient()
+            .from('study_sessions')
+            .insert(payload)
+            .select()
+            .single();
+          if (error) throw new Error(`Cloud saveSession error: ${error.message}`);
+          savedRow = inserted;
+        }
+
+        const normalized = this._fromDbSession(savedRow);
+        this.getSessions().catch(() => {});
+        return normalized;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'saveSession',
+              table: 'study_sessions',
+              recordId: data.id,
+              payload: data
+            });
+            this._optimisticSave('sp_sessions', data, user.id);
+            return data;
+          }
+        }
+        throw err;
+      }
     }
 
-    async deleteSession(id) {
+    async deleteSession(id, options = {}) {
       if (!id) return false;
-      const user = await this._getUser();
-      const { error } = await this._getClient()
-        .from('study_sessions')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      if (error) throw new Error(`Cloud deleteSession error: ${error.message}`);
-      this.getSessions().catch(() => {});
-      return true;
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'deleteSession',
+            table: 'study_sessions',
+            recordId: id
+          });
+          this._optimisticDelete('sp_sessions', id, user.id);
+          return true;
+        }
+      }
+
+      try {
+        const user = await this._getUser();
+        const { error } = await this._getClient()
+          .from('study_sessions')
+          .delete()
+          .eq('id', id)
+          .eq('user_id', user.id);
+
+        if (error) throw new Error(`Cloud deleteSession error: ${error.message}`);
+        this.getSessions().catch(() => {});
+        return true;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'deleteSession',
+              table: 'study_sessions',
+              recordId: id
+            });
+            this._optimisticDelete('sp_sessions', id, user.id);
+            return true;
+          }
+        }
+        throw err;
+      }
     }
 
     // ========================================================================
@@ -920,39 +1786,86 @@
     // ========================================================================
     async getSettings() {
       const user = await this._getUser();
-      const { data, error } = await this._getClient()
-        .from('settings')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+      if (!this._isOnline()) {
+        return this._readCache('sp_settings', user.id, this._fromDbSettings(null));
+      }
+      try {
+        const { data, error } = await this._getClient()
+          .from('settings')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
 
-      if (error) throw new Error(`Cloud getSettings error: ${error.message}`);
-      const normalized = this._fromDbSettings(data);
-      this._writeCache('sp_settings', normalized, user.id);
-      return normalized;
+        if (error) throw new Error(`Cloud getSettings error: ${error.message}`);
+        const normalized = this._fromDbSettings(data);
+        this._writeCache('sp_settings', normalized, user.id);
+        return normalized;
+      } catch (err) {
+        if (this._isTransientError(err)) {
+          return this._readCache('sp_settings', user.id, this._fromDbSettings(null));
+        }
+        throw err;
+      }
     }
 
-    async saveSettings(settings = {}) {
-      const user = await this._getUser();
-      const current = await this.getSettings();
-      const merged = {
-        theme: settings.theme || current.theme,
-        pomodoro: { ...(current.pomodoro || {}), ...(settings.pomodoro || {}) },
-        preferences: { ...(current.preferences || {}), ...(settings.preferences || {}) },
-        lastExportAt: settings.lastExportAt || current.lastExportAt
-      };
+    async saveSettings(settings = {}, options = {}) {
+      const isReplay = Boolean(options && options.isReplay);
+      const queue = this._getSyncQueue();
+      const online = this._isOnline();
 
-      const payload = this._toDbSettings(merged, user.id);
-      const { data, error } = await this._getClient()
-        .from('settings')
-        .upsert(payload, { onConflict: 'user_id' })
-        .select()
-        .single();
+      if (!online && !isReplay && queue) {
+        const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+        if (user && user.id) {
+          queue.enqueue({
+            userId: user.id,
+            action: 'saveSettings',
+            table: 'settings',
+            recordId: user.id,
+            payload: settings
+          });
+          this._optimisticSaveSettings(settings, user.id);
+          return settings;
+        }
+      }
 
-      if (error) throw new Error(`Cloud saveSettings error: ${error.message}`);
-      const normalized = this._fromDbSettings(data);
-      this._writeCache('sp_settings', normalized, user.id);
-      return normalized;
+      try {
+        const user = await this._getUser();
+        const current = await this.getSettings();
+        const merged = {
+          theme: settings.theme || current.theme,
+          pomodoro: { ...(current.pomodoro || {}), ...(settings.pomodoro || {}) },
+          preferences: { ...(current.preferences || {}), ...(settings.preferences || {}) },
+          lastExportAt: settings.lastExportAt || current.lastExportAt
+        };
+
+        const payload = this._toDbSettings(merged, user.id);
+        const { data, error } = await this._getClient()
+          .from('settings')
+          .upsert(payload, { onConflict: 'user_id' })
+          .select()
+          .single();
+
+        if (error) throw new Error(`Cloud saveSettings error: ${error.message}`);
+        const normalized = this._fromDbSettings(data);
+        this._writeCache('sp_settings', normalized, user.id);
+        return normalized;
+      } catch (err) {
+        if (!isReplay && queue && this._isTransientError(err)) {
+          const user = await this._getUser().catch(() => ({ id: RepositoryFactory.getActiveUserId() }));
+          if (user && user.id) {
+            queue.enqueue({
+              userId: user.id,
+              action: 'saveSettings',
+              table: 'settings',
+              recordId: user.id,
+              payload: settings
+            });
+            this._optimisticSaveSettings(settings, user.id);
+            return settings;
+          }
+        }
+        throw err;
+      }
     }
   }
 
@@ -980,6 +1893,22 @@
       const prevMode = this._mode;
       this._mode = mode;
       this._activeUserId = mode === 'cloud' ? (userId || this._activeUserId) : null;
+
+      if (mode === 'cloud' && this._activeUserId) {
+        const queue = typeof window !== 'undefined' && window.StudyFlowSyncQueue ? window.StudyFlowSyncQueue : (typeof global !== 'undefined' ? global.StudyFlowSyncQueue : null);
+        if (queue && typeof queue.init === 'function') {
+          queue.init({
+            userId: this._activeUserId,
+            supabaseClient: this._supabaseClient,
+            repository: this.getRepository('cloud')
+          });
+        }
+      } else if (mode === 'local') {
+        const queue = typeof window !== 'undefined' && window.StudyFlowSyncQueue ? window.StudyFlowSyncQueue : (typeof global !== 'undefined' ? global.StudyFlowSyncQueue : null);
+        if (queue && typeof queue.pause === 'function') {
+          queue.pause();
+        }
+      }
 
       if (prevMode !== mode) {
         this._notifyModeChange(mode, this._activeUserId);

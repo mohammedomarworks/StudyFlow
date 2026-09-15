@@ -57,6 +57,46 @@ function initAccountSection() {
     return `Last synced: ${Dates.timeAgo(ls)}`;
   }
 
+  function getSyncQueueStatus() {
+    const queue = window.StudyFlowSyncQueue;
+    if (!queue) return { status: 'idle', online: true, pendingCount: 0, failedCount: 0, lastSyncAt: null, lastError: null };
+    return queue.getStatus();
+  }
+
+  function getSyncBadgeClass(statusInfo) {
+    if (!statusInfo.online) return 'badge-warning';
+    if (statusInfo.status === 'syncing') return 'badge-primary';
+    if (statusInfo.failedCount > 0) return 'badge-danger';
+    if (statusInfo.pendingCount > 0) return 'badge-warning';
+    return 'badge-success';
+  }
+
+  function getSyncBadgeText(statusInfo) {
+    if (!statusInfo.online) return 'Offline';
+    if (statusInfo.status === 'syncing') return 'Syncing...';
+    if (statusInfo.failedCount > 0) return `${statusInfo.failedCount} Failed`;
+    if (statusInfo.pendingCount > 0) return `${statusInfo.pendingCount} Pending`;
+    return 'All Synced';
+  }
+
+  function getSyncDescription(statusInfo) {
+    if (!statusInfo.online) {
+      return statusInfo.pendingCount > 0
+        ? `${statusInfo.pendingCount} change${statusInfo.pendingCount > 1 ? 's' : ''} saved locally. Will sync when connection returns.`
+        : 'You are currently offline. Changes will save locally and sync when reconnected.';
+    }
+    if (statusInfo.status === 'syncing') {
+      return 'Sending pending changes to Supabase cloud...';
+    }
+    if (statusInfo.failedCount > 0) {
+      return `${statusInfo.failedCount} change${statusInfo.failedCount > 1 ? 's' : ''} encountered an issue. Click Sync Now to retry.`;
+    }
+    if (statusInfo.pendingCount > 0) {
+      return `${statusInfo.pendingCount} change${statusInfo.pendingCount > 1 ? 's' : ''} waiting to sync to Supabase cloud.`;
+    }
+    return 'All planner modifications are safely synchronized to Supabase.';
+  }
+
   function renderAccount(event, session, user, state) {
     const MigrationService = window.StudyFlowMigration;
     const RepoFactory = window.StudyFlowRepository ? window.StudyFlowRepository.RepositoryFactory : null;
@@ -166,6 +206,23 @@ function initAccountSection() {
                 <small class="text-muted" id="realtimeLastSyncedText" style="font-size:var(--fs-xs)">${getRealtimeLastSyncedText()}</small>
               </div>
             </div>
+
+            <div class="settings-row mb-3" id="syncQueueStatusRow">
+              <div class="settings-row__info">
+                <div class="settings-row__title">Cloud Write Queue & Offline Resilience</div>
+                <div class="settings-row__desc" id="syncQueueDescText">${getSyncDescription(getSyncQueueStatus())}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+                <div style="display:flex;align-items:center;gap:6px">
+                  <span class="badge ${getSyncBadgeClass(getSyncQueueStatus())}" id="syncQueueStatusBadge">${getSyncBadgeText(getSyncQueueStatus())}</span>
+                  <button type="button" class="btn btn-sm btn-ghost" id="syncNowBtn" ${(!getSyncQueueStatus().online || getSyncQueueStatus().status === 'syncing') ? 'disabled' : ''} title="Sync pending changes now">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    Sync Now
+                  </button>
+                </div>
+                ${getSyncQueueStatus().lastSyncAt ? `<small class="text-muted" style="font-size:var(--fs-xs)">Last sync: ${Dates.timeAgo(getSyncQueueStatus().lastSyncAt)}</small>` : ''}
+              </div>
+            </div>
             ` : ''}
 
             <div class="settings-row mb-3">
@@ -193,6 +250,20 @@ function initAccountSection() {
 
           const switchCloudBtn = migrationBody.querySelector('#switchCloudModeBtn');
           const switchLocalBtn = migrationBody.querySelector('#switchLocalModeBtn');
+          const syncNowBtn = migrationBody.querySelector('#syncNowBtn');
+
+          if (syncNowBtn) {
+            syncNowBtn.addEventListener('click', async () => {
+              syncNowBtn.disabled = true;
+              syncNowBtn.textContent = 'Syncing...';
+              if (window.StudyFlowSyncQueue) {
+                await window.StudyFlowSyncQueue.process();
+              }
+              App.toast('Sync check completed.', 'info');
+              renderAccount(event, session, user, state);
+            });
+          }
+
           if (switchCloudBtn && switchLocalBtn) {
             switchCloudBtn.addEventListener('click', () => {
               if (RepoFactory) RepoFactory.setMode('cloud', user.id);
