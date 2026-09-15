@@ -13,6 +13,7 @@
 let pendingImportData = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+  initAccountSection();
   initThemeGroup();
   initPomodoroForm();
   initAppPrefsForm();
@@ -20,6 +21,105 @@ document.addEventListener('DOMContentLoaded', () => {
   bindBackupControls();
   bindDangerControls();
 });
+
+/* ==========================================================================
+   0. Account & Cloud Authentication (Phase B)
+   ========================================================================== */
+function initAccountSection() {
+  const badge = App.qs('#accountStatusBadge');
+  const body = App.qs('#accountCardBody');
+  if (!badge || !body) return;
+
+  function renderAccount(event, session, user, state) {
+    if (!window.Auth) {
+      badge.className = 'badge badge-muted';
+      badge.textContent = 'Local Mode';
+      body.innerHTML = `
+        <div class="settings-row" style="padding-top:0; border-bottom:none">
+          <div class="settings-row__info">
+            <div class="settings-row__title">Offline Local-Only Storage</div>
+            <div class="settings-row__desc">Authentication is not configured. All study data is preserved privately in your browser's localStorage.</div>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    if (user && state === 'authenticated') {
+      badge.className = 'badge badge-success';
+      badge.textContent = 'Cloud Connected';
+      body.innerHTML = `
+        <div class="account-details-grid mb-4">
+          <div class="account-detail-item">
+            <span class="account-detail-label">Display Name</span>
+            <span class="account-detail-value">${App.escapeHtml(user.displayName || 'Student')}</span>
+          </div>
+          <div class="account-detail-item">
+            <span class="account-detail-label">Email Address</span>
+            <span class="account-detail-value">${App.escapeHtml(user.email || '—')}</span>
+          </div>
+          <div class="account-detail-item">
+            <span class="account-detail-label">User ID</span>
+            <span class="account-detail-value font-mono" style="font-size:0.75rem">${App.escapeHtml((user.id || '').slice(0, 18))}…</span>
+          </div>
+          <div class="account-detail-item">
+            <span class="account-detail-label">Data Architecture</span>
+            <span class="account-detail-value" style="color:var(--primary)">Local-First (v1.5.0)</span>
+          </div>
+        </div>
+
+        <div class="alert alert-warning mb-4" style="font-size:var(--fs-xs);padding:var(--space-3);background:color-mix(in srgb, var(--primary) 8%, var(--surface));border:1px solid var(--primary-soft);border-radius:var(--radius-sm);color:var(--text)">
+          <b>ℹ️ Note on Phase B:</b> You are signed in to StudyFlow Cloud Auth. In this phase, authentication and identity are cloud-connected, while your tasks, subjects, habits, and notes continue to run in high-speed, offline-capable browser storage.
+        </div>
+
+        <div class="settings-row" style="border-bottom:none; padding-bottom:0">
+          <div class="settings-row__info">
+            <div class="settings-row__title">Sign Out of Cloud Account</div>
+            <div class="settings-row__desc">Disconnects your cloud session. <strong>Your local planner data remains completely safe</strong> in this browser.</div>
+          </div>
+          <button type="button" class="btn btn-ghost" id="settingsSignOutBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            Sign Out
+          </button>
+        </div>
+      `;
+
+      const signOutBtn = body.querySelector('#settingsSignOutBtn');
+      if (signOutBtn) {
+        signOutBtn.addEventListener('click', async () => {
+          await window.Auth.signOut();
+          App.toast('Signed out successfully. Your local planner data remains intact.', 'info');
+        });
+      }
+    } else {
+      badge.className = 'badge badge-muted';
+      badge.textContent = 'Local Mode';
+      const authUrl = `auth.html?redirect=${encodeURIComponent('settings.html')}`;
+
+      body.innerHTML = `
+        <div class="settings-row" style="padding-top:0; border-bottom:none">
+          <div class="settings-row__info">
+            <div class="settings-row__title">Local Storage Mode</div>
+            <div class="settings-row__desc">You are currently using StudyFlow offline. Sign in to link your cloud identity and prepare for future multi-device synchronization.</div>
+          </div>
+          <a href="${authUrl}" class="btn btn-primary" id="settingsSignInBtn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+            Sign In / Create Account
+          </a>
+        </div>
+      `;
+    }
+  }
+
+  if (window.Auth) {
+    window.Auth.onAuthStateChange(renderAccount);
+    window.Auth.init().then(res => {
+      renderAccount('INITIAL_SESSION', res.session, res.user, res.state);
+    });
+  } else {
+    renderAccount('NO_AUTH', null, null, 'unauthenticated');
+  }
+}
 
 /* ==========================================================================
    1. Theme Preference

@@ -582,12 +582,139 @@ const App = {
     return this.QUOTES[Math.floor(Math.random() * this.QUOTES.length)];
   },
 
+  /* ========================== AUTH NAVIGATION =========================== */
+  initAuthNav() {
+    const navActions = this.qs('.nav-actions');
+    if (!navActions) return;
+
+    let navAuth = this.qs('.nav-auth', navActions);
+    if (!navAuth) {
+      navAuth = document.createElement('div');
+      navAuth.className = 'nav-auth';
+      navAuth.id = 'navAuth';
+      const themeToggle = this.qs('.theme-toggle', navActions);
+      if (themeToggle) {
+        navActions.insertBefore(navAuth, themeToggle);
+      } else {
+        navActions.prepend(navAuth);
+      }
+    }
+
+    const renderAuthNav = (event, session, user, state) => {
+      if (!window.Auth) {
+        navAuth.innerHTML = '';
+        return;
+      }
+
+      const isAuthPage = document.body && document.body.dataset.page === 'auth';
+
+      if (user && state === 'authenticated') {
+        const displayName = user.displayName || 'Student';
+        const initials = (displayName.charAt(0) || 'S').toUpperCase();
+        const settingsUrl = this.path('pages/settings.html') + '#sectionAccount';
+
+        navAuth.innerHTML = `
+          <div class="nav-user-menu" id="navUserMenu">
+            <button type="button" class="nav-user-btn" id="navUserBtn" aria-label="Account menu for ${this.escapeHtml(displayName)}" aria-haspopup="true" aria-expanded="false">
+              <span class="user-avatar-badge" aria-hidden="true">${this.escapeHtml(initials)}</span>
+              <span class="nav-user-name">${this.escapeHtml(displayName)}</span>
+              <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="nav-user-dropdown" id="navUserDropdown" role="menu" aria-label="Account menu">
+              <div class="dropdown-header">
+                <div class="dropdown-name">${this.escapeHtml(displayName)}</div>
+                <div class="dropdown-email text-muted">${this.escapeHtml(user.email || '')}</div>
+              </div>
+              <div class="dropdown-divider"></div>
+              <a href="${settingsUrl}" class="dropdown-item" role="menuitem">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <span>Account & Settings</span>
+              </a>
+              <button type="button" class="dropdown-item dropdown-logout" id="navLogoutBtn" role="menuitem">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        `;
+
+        const userBtn = navAuth.querySelector('#navUserBtn');
+        const userMenu = navAuth.querySelector('#navUserMenu');
+        const logoutBtn = navAuth.querySelector('#navLogoutBtn');
+
+        if (userBtn && userMenu) {
+          userBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const isOpen = userMenu.classList.toggle('open');
+            userBtn.setAttribute('aria-expanded', isOpen);
+          });
+        }
+
+        if (logoutBtn) {
+          logoutBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (userMenu) userMenu.classList.remove('open');
+            if (userBtn) userBtn.setAttribute('aria-expanded', 'false');
+            await window.Auth.signOut();
+            this.toast('Signed out. Local planner data remains safe.', 'info');
+          });
+        }
+      } else if (!isAuthPage && state !== 'loading') {
+        const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+        const isSub = this.isSubpage();
+        const redirectParam = isSub ? currentPage : 'index.html';
+        const authUrl = `${this.path('pages/auth.html')}?redirect=${encodeURIComponent(redirectParam)}`;
+
+        navAuth.innerHTML = `
+          <a href="${authUrl}" class="btn btn-ghost btn-sm nav-auth-btn" id="navAuthBtn" title="Sign In">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
+            <span>Sign In</span>
+          </a>
+        `;
+      } else {
+        navAuth.innerHTML = '';
+      }
+    };
+
+    // Outside click & escape listeners for user dropdown
+    document.addEventListener('click', (e) => {
+      const openMenu = this.qs('.nav-user-menu.open');
+      if (openMenu && !openMenu.contains(e.target)) {
+        openMenu.classList.remove('open');
+        const btn = openMenu.querySelector('.nav-user-btn');
+        if (btn) btn.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const openMenu = this.qs('.nav-user-menu.open');
+        if (openMenu) {
+          openMenu.classList.remove('open');
+          const btn = openMenu.querySelector('.nav-user-btn');
+          if (btn) {
+            btn.setAttribute('aria-expanded', 'false');
+            btn.focus();
+          }
+        }
+      }
+    });
+
+    if (window.Auth) {
+      window.Auth.onAuthStateChange(renderAuthNav);
+      window.Auth.init().then(res => {
+        renderAuthNav('INITIAL_SESSION', res.session, res.user, res.state);
+      });
+    }
+  },
+
   /* ========================= INIT ===================================== */
   init() {
     this.initThemeListener();
     this.initMotionListener();
     this.initNavbar();
     this.initGlobalSearch();
+    this.initAuthNav();
 
     // Global Escape closes any open modal
     document.addEventListener('keydown', e => {

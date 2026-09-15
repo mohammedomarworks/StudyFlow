@@ -1136,3 +1136,411 @@ kbd, .kbd-badge {
 }
 .footer b { color: var(--primary); }
 
+/* ==========================================================================
+   AUTHENTICATION & USER IDENTITY (StudyFlow v2.0 Phase B)
+   ========================================================================== */
+
+/* Navbar Auth Area */
+.nav-auth {
+  display: flex;
+  align-items: center;
+}
+.nav-auth-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 38px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+.nav-auth-btn svg { width: 15px; height: 15px; }
+
+/* User Account Menu in Navbar */
+.nav-user-menu {
+  position: relative;
+}
+.nav-user-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 3px 12px 3px 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+.nav-user-btn:hover,
+.nav-user-menu.open .nav-user-btn {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+}
+.user-avatar-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--gradient);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+.nav-user-name {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  color: var(--text);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chevron-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+  flex-shrink: 0;
+}
+.nav-user-menu.open .chevron-icon {
+  transform: rotate(180deg);
+}
+
+/* User Dropdown */
+.nav-user-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: 150;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  animation: fadeIn var(--transition-fast) both;
+}
+.nav-user-menu.open .nav-user-dropdown {
+  display: flex;
+}
+.dropdown-header {
+  padding: 8px 10px;
+}
+.dropdown-name {
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.3;
+}
+.dropdown-email {
+  font-size: var(--fs-xs);
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-top: 2px;
+}
+.dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--text-body);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-decoration: none;
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+.dropdown-item:hover,
+.dropdown-item:focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
+  outline: none;
+}
+.dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.dropdown-logout {
+  color: var(--danger) !important;
+}
+.dropdown-logout:hover,
+.dropdown-logout:focus-visible {
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface)) !important;
+  color: var(--danger) !important;
+}
+.dropdown-logout svg {
+  color: var(--danger) !important;
+}
+
+/* Auth Page Specifics */
+.auth-page-wrap {
+  min-height: calc(100vh - var(--navbar-h));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+.auth-container {
+  width: 100%;
+  max-width: 480px;
+  margin-inline: auto;
+}
+.auth-card {
+  padding: 36px 32px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--surface-2);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 24px;
+  gap: 4px;
+}
+.auth-tab {
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: var(--transition-fast);
+  text-align: center;
+}
+.auth-tab:hover {
+  color: var(--text);
+}
+.auth-tab.active {
+  background: var(--surface);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+.auth-view__head {
+  margin-bottom: 22px;
+}
+.auth-title {
+  font-size: var(--fs-xl);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+.auth-subtitle {
+  font-size: var(--fs-sm);
+}
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+.field-label-row label {
+  margin-bottom: 0;
+}
+.link-btn {
+  border: none;
+  background: transparent;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--transition-fast);
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+.password-wrap {
+  position: relative;
+  width: 100%;
+}
+.password-wrap .input {
+  padding-right: 44px;
+}
+.password-toggle-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.password-toggle-btn:hover {
+  color: var(--text);
+  background: var(--surface-3);
+}
+.password-toggle-btn svg {
+  width: 17px;
+  height: 17px;
+}
+.auth-submit-btn {
+  margin-top: 20px;
+  position: relative;
+}
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: authSpin 0.6s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 8px;
+}
+@keyframes authSpin {
+  to { transform: rotate(360deg); }
+}
+.auth-switch {
+  margin-top: 22px;
+  text-align: center;
+  font-size: var(--fs-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.auth-alert {
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  font-size: var(--fs-xs);
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.auth-alert .alert-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.auth-alert.alert-danger {
+  background: color-mix(in srgb, var(--danger) 10%, var(--surface));
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+.auth-alert.alert-success {
+  background: color-mix(in srgb, var(--success) 12%, var(--surface));
+  border: 1px solid var(--success);
+  color: var(--success);
+}
+.auth-notice-view {
+  text-align: center;
+  padding: 16px 8px 8px;
+}
+.notice-icon-badge {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--primary-soft);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 16px;
+}
+.notice-icon-badge svg {
+  width: 32px;
+  height: 32px;
+}
+.notice-icon-badge.success {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+.auth-notice-actions {
+  margin-top: 24px;
+}
+.auth-privacy-foot {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: var(--fs-xs);
+  color: var(--text-faint);
+  text-align: center;
+}
+.auth-privacy-foot svg {
+  width: 15px;
+  height: 15px;
+  color: var(--success);
+  flex-shrink: 0;
+}
+
+/* Settings Account Section */
+.account-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.account-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-4);
+}
+.account-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.account-detail-label {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.account-detail-value {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-all;
+}
+.account-status-badge-active {
+  background: color-mix(in srgb, var(--success) 15%, transparent);
+  color: var(--success);
+}
+.account-status-badge-local {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}

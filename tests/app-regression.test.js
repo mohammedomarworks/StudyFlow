@@ -41,6 +41,7 @@ runTest('1. All HTML pages exist and script src paths resolve to physical files'
     'pages/settings.html',
     'pages/about.html',
     'pages/habits.html',
+    'pages/auth.html',
     'supabase-test.html'
   ];
 

@@ -336,7 +336,12 @@
     Made with <b>StudyFlow</b> · Your data stays private in your browser · © <span data-year></span>
   </footer>
 
-  <!-- Scripts: data layer → shared shell → page logic -->
+  <!-- Scripts: Supabase config → CDN → Client → Auth → data layer → shared shell → page logic -->
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-config.local.js" onerror="console.info('supabase-config.local.js not found; using base config')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/auth.js"></script>
   <script src="js/storage.js"></script>
   <script src="js/app.js"></script>
   <script src="js/dashboard.js"></script>
