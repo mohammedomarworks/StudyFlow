@@ -19,7 +19,7 @@
 
 ---
 
-> **Note for Developers**: StudyFlow v2.0 development is currently in progress on branch `feature/v2-foundation`. Phase A establishes the Supabase database schema, Row Level Security (RLS) policies, and repository boundary. The application currently operates in stable v1.5.0 local-first mode with zero cloud sync or authentication UI active. See [`docs/v2-architecture.md`](docs/v2-architecture.md) for architectural specifications.
+> **StudyFlow v2.0 Release Ready**: StudyFlow v2.0 brings optional, secure cloud synchronization, user authentication, multi-device realtime sync, and offline write resilience powered by Supabase—while strictly preserving the fast, zero-dependency, local-first architecture. All user data remains 100% functional offline without an account. See [`docs/v2-architecture.md`](docs/v2-architecture.md) and [`docs/v2-release-audit.md`](docs/v2-release-audit.md) for complete architectural specifications and audit reports.
 
 ---
 
@@ -30,14 +30,19 @@ StudyFlow provides an integrated suite of student productivity tools designed to
 - **🏠 Dynamic Dashboard**: Instant pulse on today's priorities, urgent tasks, upcoming 7-day deadlines, exam countdowns, subject completion bars, and quick capture modals.
 - **📋 Enhanced Tasks**: Comprehensive task management with functional categories (*Assignments, Reading, Revision, Practice, Project, Other*), priority tiers (*High, Medium, Low*), time estimates, due dates, multi-criteria sorting, quick-completion toggles, and safe deletion confirmation.
 - **📚 Subjects Management**: Color-coded academic subjects with syllabus codes, target exams, associated tasks, and progress tracking.
+- **⚡ Habits & Routines**: Build consistent study routines with daily and weekday frequency targets, visual streak tracking, completion heatmaps, and one-click check-ins.
 - **📅 Interactive Study Calendar**: Month-view academic schedule with color-coded exam markers, task due indicators, completion badges, and interactive day detail inspection drawer.
 - **⏱️ Focus & Pomodoro Timer**: Dedicated deep work timer with Pomodoro (25m), Short Break (5m), and Long Break (15m) modes, custom Web Audio synthesis chimes, subject linking, and auto-logged focus history.
 - **📊 Progress & Analytics**: Visual completion ratios, priority breakdowns, focus velocity streaks, habit trends, and chronological activity feed.
 - **📝 Notes & Knowledge Base**: Markdown-enabled study notes, subject linking, favorite pinning, and rapid search filtering.
+- **🔐 Authentication & Accounts (Optional)**: Privacy-preserving authentication via Supabase Auth with secure session management, navbar user chip, and account profile controls.
+- **☁️ Realtime Cloud Synchronization**: Instant multi-tab and multi-device live data synchronization with conflict handling via Last-Writer-Wins (LWW) and active form protection.
+- **📡 Offline Resilience & Write Queue**: Optimistic UI updates with durable FIFO write queuing, exponential backoff retries, and compaction to guarantee zero data loss during network disruptions.
+- **🔄 Local-to-Cloud Migration**: Seamless one-click migration of offline browser data to cloud accounts with interactive preview and zero data loss on logout.
 - **⚙️ Settings & Data Control**: In-memory storage diagnostics, safe pre-import validation, side-by-side JSON preview comparison modal, customizable daily focus goals, app preferences (default sorting, confirm delete, reduced motion), non-reseeding reset, and exportable JSON backups.
 - **🔍 Global Search (`Cmd+K` / `Ctrl+K`)**: Fast universal command palette searching across tasks, subjects, and notes with instant keyboard navigation.
 - **🌓 Adaptive Theme**: Seamless Dark, Light, and System theme synchronization with persistent preferences and zero flash on load.
-- **🔒 100% Local-First & Private**: Zero cloud sync, zero telemetry, zero accounts, zero external database servers—all data resides strictly in browser `localStorage`.
+- **🔒 100% Local-First & Private by Default**: Fully functional without an account or internet connection—all data resides safely in browser `localStorage`.
 
 ---
 
@@ -45,12 +50,13 @@ StudyFlow provides an integrated suite of student productivity tools designed to
 
 | Technology | Implementation & Purpose |
 |------------|---------------------------|
-| **HTML5** | Semantic markup across 9 distinct pages with accessibility attributes (`aria-*`, landmark roles) |
+| **HTML5** | Semantic markup across 11 distinct pages with accessibility attributes (`aria-*`, landmark roles) |
 | **CSS3** | Modern custom properties (design tokens), responsive CSS Grid, Flexbox, and fluid typography |
 | **Vanilla JavaScript (ES6+)** | Modular application architecture, event delegation, and reactive DOM rendering without frameworks |
 | **Web Storage API** | Browser `localStorage` engine with schema migrations, validation, and diagnostics |
 | **Web Audio API** | Synthesized chime frequencies for focus timer alerts without external audio assets |
-| **Zero Runtime Dependencies** | No React, Vue, npm packages, or bundlers required—runs natively in any modern browser |
+| **Supabase (Optional)** | PostgreSQL, Row Level Security (RLS), Auth, Realtime WebSockets, and PostgREST client |
+| **Zero Build Steps / Zero Bundlers** | Pure native web standards—runs directly in modern browsers or static hosting |
 
 ---
 
@@ -60,13 +66,15 @@ StudyFlow provides an integrated suite of student productivity tools designed to
 StudyFlow/
 ├── index.html                   # Main Dashboard
 ├── pages/
+│   ├── auth.html                # Account Sign In, Sign Up & Password Recovery
 │   ├── tasks.html               # Task Management
 │   ├── subjects.html            # Subject Directory & Syllabi
+│   ├── habits.html              # Daily & Weekday Habits Tracker
 │   ├── calendar.html            # Academic Calendar & Day Inspector
 │   ├── timer.html               # Focus & Pomodoro Timer
 │   ├── progress.html            # Analytics, Velocity & Activity Log
 │   ├── notes.html               # Notes & Knowledge Management
-│   ├── settings.html            # Preferences, Backup & Diagnostics
+│   ├── settings.html            # Preferences, Backup, Migration & Sync Queue
 │   └── about.html               # Architecture, Live Stats & Badges
 ├── css/
 │   ├── variables.css            # Design tokens, color palettes & spacing
@@ -77,17 +85,36 @@ StudyFlow/
 ├── js/
 │   ├── storage.js               # Store API, LocalStorage engine, validation & diagnostics
 │   ├── app.js                   # Navigation, theme toggle, Cmd+K modal & shared helpers
+│   ├── auth.js                  # Supabase Auth controller, session state & navbar chip
+│   ├── auth-page.js             # Auth UI forms, validation & password recovery
+│   ├── repository.js            # Base, Local & Cloud Repository boundary & mapper
+│   ├── migration.js             # Local-to-cloud migration service with UUID mapping
+│   ├── realtime.js              # Realtime WebSocket manager & LWW conflict handler
+│   ├── sync-queue.js            # Offline resilient write queue with FIFO replay
+│   ├── supabase.js              # Supabase client initializer & security validator
+│   ├── supabase-config.js       # Public Supabase project configuration
 │   ├── dashboard.js             # Dashboard widgets, urgent queues & exam countdowns
 │   ├── tasks.js                 # Task filtering, sorting, CRUD & inline completion
 │   ├── subjects.js              # Subject management & exam scheduling
+│   ├── habits.js                # Habit tracker UI, streaks & completions
 │   ├── calendar.js              # Month rendering, day inspection & event markers
 │   ├── timer.js                 # Pomodoro state machine & Web Audio chimes
 │   ├── progress.js              # Completion metrics, chart calculations & streak logic
 │   ├── notes.js                 # Note editor, markdown renderer, pinning & subject filter
-│   ├── settings.js              # Settings controller, import preview & diagnostics
+│   ├── settings.js              # Settings controller, import preview & sync diagnostics
 │   └── about.js                 # Live database snapshot statistics
+├── supabase/
+│   ├── migrations/
+│   │   ├── 0001_initial_schema.sql         # 9 tables, RLS policies, ownership triggers
+│   │   └── 0002_realtime_publication.sql  # Supabase Realtime publication setup
+│   └── tests/
+│       └── 0001_rls_and_schema.test.sql    # pgTAP database-level RLS test suite
+├── tests/                       # Automated Node.js test suites (9 suites, 101 tests)
 ├── assets/
 │   └── screenshots/             # Interface preview screenshots
+├── docs/
+│   ├── v2-architecture.md       # Architectural specifications & design patterns
+│   └── v2-release-audit.md      # Production audit report & release readiness sign-off
 ├── DESIGN_SYSTEM.md             # Color tokens, typography, and component specifications
 ├── CHANGELOG.md                 # Project version history and release notes
 ├── LICENSE                      # MIT Open Source License
@@ -242,13 +269,18 @@ Learn more about StudyFlow and its purpose as a student productivity application
 - [x] Basic LocalStorage persistence
 
 ### Version 2.0.0 — Production Release ✅
-- [x] **Full UI/UX Redesign**: High-contrast modern dark & light themes, Plus Jakarta Sans typography, and accessible design tokens.
+- [x] **Full UI/UX Redesign**: High-contrast modern dark & light themes, Plus Jakarta Sans typography, and accessible design tokens across 11 pages.
 - [x] **Urgency-Driven Dashboard**: Today's priorities, 7-day deadlines, exam countdowns, subject velocity meters, and quick task modal.
 - [x] **Advanced Task Workflow**: Categories (*Assignments, Reading, Revision, etc.*), time estimates, priorities, multi-criteria sorting, inline completion, and delete safeguards.
+- [x] **⚡ Habits Tracker**: Daily and weekday recurring habits tracker with streak calculations, completion heatmaps, and quick toggle buttons.
 - [x] **Interactive Academic Calendar**: Color-coded exam markers, task indicators, day drawer inspection, and inline task toggles.
 - [x] **Deep Work Pomodoro Timer**: Focus (25m), Short Break (5m), Long Break (15m), Web Audio chimes, and automatic subject-linked session logging.
 - [x] **Progress & Velocity Analytics**: Subject completion ratios, daily study streaks, focus analytics, and chronological activity feed.
 - [x] **Notes & Knowledge Base**: Markdown editor, note pinning, subject filtering, and fast keyword search.
+- [x] **🔐 Supabase Cloud Foundation & Auth**: PostgreSQL 9-table schema with strict RLS, cross-user triggers, session management, and navbar auth chip.
+- [x] **☁️ Realtime Cloud Synchronization**: Instant multi-tab and multi-device live data synchronization with conflict handling via Last-Writer-Wins (LWW) and active form protection.
+- [x] **📡 Offline Resilience & Write Queue**: Optimistic UI updates with durable FIFO write queuing, exponential backoff retries, and offline compaction.
+- [x] **🔄 Local-to-Cloud Migration**: Seamless one-click migration of offline browser data to cloud accounts with zero data loss on logout.
 - [x] **Settings & Data Protection**: Pre-import validation, side-by-side JSON comparison modal, in-memory diagnostics, daily focus goal targets, and anti-reseeding workspace reset.
 - [x] **Global Command Palette (`Cmd+K`)**: Unified cross-entity search with keyboard navigation.
 - [x] **Accessibility & Performance**: 100% clean navigation links, safe HTML escaping, reduced-motion preferences, and zero runtime dependencies.

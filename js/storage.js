@@ -291,14 +291,13 @@ const Store = {
 
   saveSubject(data) {
     const subjects = this.getSubjects();
-    if (data.id) {
-      const i = subjects.findIndex(s => s.id === data.id);
-      if (i > -1) {
-        subjects[i] = { ...subjects[i], ...data };
-      }
+    const now = new Date().toISOString();
+    const i = data.id ? subjects.findIndex(s => s.id === data.id) : -1;
+    if (i > -1) {
+      subjects[i] = { ...subjects[i], ...data };
     } else {
-      data.id = this.uid();
-      data.createdAt = new Date().toISOString();
+      data.id = data.id || this.uid();
+      data.createdAt = data.createdAt || now;
       subjects.push(data);
       this.logActivity('subject_create', `Created subject "${data.name}"`, { subjectId: data.id });
     }
@@ -357,16 +356,15 @@ const Store = {
 
   saveTask(data) {
     const tasks = this.getTasks();
-    if (data.id) {
-      const i = tasks.findIndex(t => t.id === data.id);
-      if (i > -1) {
-        tasks[i] = { ...tasks[i], ...data };
-      }
+    const now = new Date().toISOString();
+    const i = data.id ? tasks.findIndex(t => t.id === data.id) : -1;
+    if (i > -1) {
+      tasks[i] = { ...tasks[i], ...data };
     } else {
-      data.id = this.uid();
-      data.completed = false;
-      data.completedAt = null;
-      data.createdAt = new Date().toISOString();
+      data.id = data.id || this.uid();
+      data.completed = Boolean(data.completed);
+      data.completedAt = data.completedAt || (data.completed ? now : null);
+      data.createdAt = data.createdAt || now;
       tasks.push(data);
       this.logActivity('task_create', `Added task "${data.title}"`, { taskId: data.id, priority: data.priority });
     }
@@ -860,18 +858,17 @@ const Store = {
 
   saveSession(data) {
     const sessions = this.getSessions();
-    if (!data.id) {
-      data.id = this.uid();
-      // A session logged from the timer is a focus session unless explicitly
-      // marked as a break. Normalizing here means the activity feed and stats
-      // stay correct even if a caller omits `type`.
-      data.type = data.type === 'break' ? 'break' : 'focus';
-      data.durationMinutes = Number(data.durationMinutes) || 0;
-      data.completedAt = data.completedAt || new Date().toISOString();
-      sessions.unshift(data);
+    const now = new Date().toISOString();
+    const i = data.id ? sessions.findIndex(s => s.id === data.id) : -1;
+    data.type = data.type === 'break' ? 'break' : 'focus';
+    data.durationMinutes = Number(data.durationMinutes) || 0;
+    data.completedAt = data.completedAt || now;
+    if (i > -1) {
+      sessions[i] = { ...sessions[i], ...data };
     } else {
-      const i = sessions.findIndex(s => s.id === data.id);
-      if (i > -1) sessions[i] = { ...sessions[i], ...data };
+      data.id = data.id || this.uid();
+      data.createdAt = data.createdAt || now;
+      sessions.unshift(data);
     }
     this._write(this.KEYS.sessions, sessions);
     this._syncCloud('saveSession', data);
