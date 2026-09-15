@@ -22,12 +22,12 @@ window.STUDYFLOW_SUPABASE_CONFIG = {
    * Supabase Project URL
    * Example: "https://xyzcompany.supabase.co"
    */
-  url: "",
+  url: "https://rlqjeilhsgnqjoazejca.supabase.co",
 
   /**
    * Supabase Public / Publishable API Key
    * Example: "sb_pub_..." or your project's anon/public key.
    * MUST NOT be a service_role key!
    */
-  publishableKey: ""
+  publishableKey: "sb_publishable_BPp2b5BW0ElBhY2I7iZwTw_mdqw3kgg"
 };
