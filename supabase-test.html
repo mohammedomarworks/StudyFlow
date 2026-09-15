@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>StudyFlow v2.0 — Supabase Connectivity Test (Dev Only)</title>
+
+  <!-- Theme check before first paint -->
+  <script>
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('sp_settings') || '{}');
+        var pref = s.theme || 'system';
+        var actual = pref === 'system' ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : pref;
+        document.documentElement.setAttribute('data-theme', actual);
+      } catch (e) {}
+    })();
+  </script>
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/base.css" />
+  <link rel="stylesheet" href="css/components.css" />
+
+  <style>
+    .dev-banner {
+      background: rgba(245, 158, 11, 0.15);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.3);
+      color: var(--amber, #f59e0b);
+      padding: 8px 16px;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .test-container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 20px 64px;
+    }
+    .test-header {
+      margin-bottom: 28px;
+    }
+    .test-header h1 {
+      font-size: 1.75rem;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .test-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .test-card {
+      background: var(--surface, #1e1e2d);
+      border: 1px solid var(--border, #2d2d3f);
+      border-radius: var(--radius-lg, 12px);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .card-title {
+      font-size: 0.875rem;
+      color: var(--text-muted, #94a3b8);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-detail {
+      font-size: 0.8125rem;
+      color: var(--text-muted, #94a3b8);
+      word-break: break-all;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+    .badge-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .badge-neutral { background: rgba(148, 163, 184, 0.15); color: #94a3b8; }
+    .console-panel {
+      background: var(--surface, #1e1e2d);
+      border: 1px solid var(--border, #2d2d3f);
+      border-radius: var(--radius-lg, 12px);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+    .console-header {
+      background: rgba(0, 0, 0, 0.2);
+      border-bottom: 1px solid var(--border, #2d2d3f);
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .console-body {
+      padding: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+    .log-row {
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+    .log-row:last-child { border-bottom: none; }
+    .log-pass { color: #10b981; }
+    .log-fail { color: #ef4444; }
+    .log-warn { color: #f59e0b; }
+    .log-info { color: var(--text-muted, #94a3b8); }
+    .guidance-box {
+      background: rgba(99, 102, 241, 0.08);
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      border-radius: var(--radius-md, 8px);
+      padding: 16px;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    .guidance-box code {
+      background: rgba(0, 0, 0, 0.25);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.8125rem;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Dev Banner -->
+  <div class="dev-banner">
+    <span>⚠️ DEVELOPMENT & DIAGNOSTICS ONLY — PHASE A (SUPABASE FOUNDATION)</span>
+    <a href="index.html" style="color: inherit; text-decoration: underline;">← Back to App Dashboard</a>
+  </div>
+
+  <main class="test-container">
+    <header class="test-header">
+      <h1>
+        <span>⚡</span> Supabase Connectivity & Security Inspector
+      </h1>
+      <p style="color: var(--text-muted, #94a3b8); font-size: 0.9375rem;">
+        Non-destructive verification of Supabase client initialization, configuration security, and Row Level Security isolation.
+      </p>
+    </header>
+
+    <!-- Top Diagnostic Cards -->
+    <div class="test-grid">
+      <!-- 1. Configuration Status -->
+      <div class="test-card" id="cardConfig">
+        <div class="card-title">
+          <span>1. Configuration</span>
+          <span class="badge badge-neutral" id="badgeConfig">Checking...</span>
+        </div>
+        <div class="card-value" id="valConfig">Detecting...</div>
+        <div class="card-detail" id="detailConfigUrl">URL: —</div>
+        <div class="card-detail" id="detailConfigKey">Key: —</div>
+      </div>
+
+      <!-- 2. Client Status -->
+      <div class="test-card" id="cardClient">
+        <div class="card-title">
+          <span>2. Supabase Client</span>
+          <span class="badge badge-neutral" id="badgeClient">Idle</span>
+        </div>
+        <div class="card-value" id="valClient">Not Initialized</div>
+        <div class="card-detail" id="detailClientSdk">SDK: Checking CDN...</div>
+        <div class="card-detail" id="detailClientMode">Mode: Offline Local-First</div>
+      </div>
+
+      <!-- 3. Auth Session -->
+      <div class="test-card" id="cardAuth">
+        <div class="card-title">
+          <span>3. Auth Session State</span>
+          <span class="badge badge-neutral" id="badgeAuth">Unchecked</span>
+        </div>
+        <div class="card-value" id="valAuth">—</div>
+        <div class="card-detail" id="detailAuth">Login is not required for Phase A.</div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div style="display: flex; gap: 12px; margin-bottom: 24px; align-items: center;">
+      <button class="btn btn-primary" id="btnRunTests" style="padding: 10px 18px;">
+        ▶ Run Connectivity Check
+      </button>
+      <button class="btn btn-ghost" id="btnClearLogs">
+        Clear Output
+      </button>
+      <span id="testSpinner" style="display: none; font-size: 0.875rem; color: var(--text-muted);">
+        Testing in progress...
+      </span>
+    </div>
+
+    <!-- Live Test Console -->
+    <div class="console-panel">
+      <div class="console-header">
+        <span style="font-weight: 600; font-size: 0.875rem;">Verification Output Log</span>
+        <span id="summaryBadge" class="badge badge-neutral">Ready</span>
+      </div>
+      <div class="console-body" id="consoleLogs">
+        <div class="log-row log-info">
+          <span>[Info] Click "Run Connectivity Check" to execute development verification tests.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Developer Setup Guide -->
+    <div class="guidance-box">
+      <h3 style="margin-top: 0; margin-bottom: 8px; font-size: 0.9375rem;">💡 How to Configure Supabase Locally:</h3>
+      <ol style="margin: 0; padding-left: 20px; font-size: 0.8125rem; line-height: 1.6;">
+        <li>Create a project in your <a href="https://app.supabase.com" target="_blank" rel="noopener" style="color: var(--primary, #6366f1); text-decoration: underline;">Supabase Dashboard</a>.</li>
+        <li>Execute <code>supabase/migrations/0001_initial_schema.sql</code> in your project's SQL Editor.</li>
+        <li>Copy your Project URL and <strong>anon / public key</strong> into <code>js/supabase-config.local.js</code>:
+          <pre style="background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; margin: 6px 0; overflow-x: auto;">window.STUDYFLOW_SUPABASE_CONFIG = {
+  url: "https://your-project.supabase.co",
+  publishableKey: "your-anon-or-publishable-key"
+};</pre>
+        </li>
+        <li><strong>Security Rule</strong>: NEVER paste <code>service_role</code> or secret keys into browser configuration!</li>
+      </ol>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- SCRIPTS: Explicitly ordered per Phase A requirements                 -->
+  <!-- 1. Base Configuration Placeholder                                    -->
+  <!-- 2. Local Configuration Override (when available)                    -->
+  <!-- 3. Supabase JS Client Loader (CDN)                                   -->
+  <!-- 4. StudyFlow Supabase Client Module                                  -->
+  <!-- 5. StudyFlow Supabase Test Runner                                    -->
+  <!-- ===================================================================== -->
+  <script src="js/supabase-config.js"></script>
+  <script src="js/supabase-config.local.js" onerror="console.info('supabase-config.local.js not found; using base config')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabase.js"></script>
+  <script src="js/supabase-test.js"></script>
+
+  <!-- Page Controller Logic -->
+  <script>
+    (function () {
+      'use strict';
+
+      const elBadgeConfig = document.getElementById('badgeConfig');
+      const elValConfig = document.getElementById('valConfig');
+      const elDetailConfigUrl = document.getElementById('detailConfigUrl');
+      const elDetailConfigKey = document.getElementById('detailConfigKey');
+
+      const elBadgeClient = document.getElementById('badgeClient');
+      const elValClient = document.getElementById('valClient');
+      const elDetailClientSdk = document.getElementById('detailClientSdk');
+      const elDetailClientMode = document.getElementById('detailClientMode');
+
+      const elBadgeAuth = document.getElementById('badgeAuth');
+      const elValAuth = document.getElementById('valAuth');
+      const elDetailAuth = document.getElementById('detailAuth');
+
+      const elConsole = document.getElementById('consoleLogs');
+      const elSummaryBadge = document.getElementById('summaryBadge');
+      const elBtnRun = document.getElementById('btnRunTests');
+      const elBtnClear = document.getElementById('btnClearLogs');
+      const elSpinner = document.getElementById('testSpinner');
+
+      function maskKey(key) {
+        if (!key) return 'None';
+        if (key.length <= 12) return '••••••••';
+        return key.slice(0, 7) + '••••••••' + key.slice(-4);
+      }
+
+      function updateDashboardState() {
+        // 1. Check Configuration
+        const config = window.StudyFlowSupabase ? window.StudyFlowSupabase.getConfig() : null;
+        const validation = window.StudyFlowSupabase ? window.StudyFlowSupabase.validateConfig(config) : { valid: false, errors: ['Module not loaded'] };
+
+        if (!config || (!config.url && !config.publishableKey)) {
+          elBadgeConfig.className = 'badge badge-warning';
+          elBadgeConfig.textContent = 'Unconfigured';
+          elValConfig.textContent = 'No Config Detected';
+          elDetailConfigUrl.textContent = 'URL: Not set (using local localStorage)';
+          elDetailConfigKey.textContent = 'Key: Not set';
+        } else if (validation.isSecretKey) {
+          elBadgeConfig.className = 'badge badge-danger';
+          elBadgeConfig.textContent = 'SECURITY ERROR';
+          elValConfig.textContent = 'Secret Key Detected';
+          elDetailConfigUrl.textContent = `URL: ${config.url || '—'}`;
+          elDetailConfigKey.textContent = 'CRITICAL: service_role key prohibited in browser!';
+        } else if (!validation.valid) {
+          elBadgeConfig.className = 'badge badge-danger';
+          elBadgeConfig.textContent = 'Invalid';
+          elValConfig.textContent = 'Configuration Error';
+          elDetailConfigUrl.textContent = `Errors: ${validation.errors.join(', ')}`;
+          elDetailConfigKey.textContent = `Key: ${maskKey(config.publishableKey)}`;
+        } else {
+          elBadgeConfig.className = 'badge badge-success';
+          elBadgeConfig.textContent = 'Configured';
+          elValConfig.textContent = 'Valid Configuration';
+          elDetailConfigUrl.textContent = `URL: ${config.url}`;
+          elDetailConfigKey.textContent = `Key: ${maskKey(config.publishableKey)} (public anon key)`;
+        }
+
+        // 2. Check Supabase SDK & Client
+        const hasSdk = Boolean(window.supabase && typeof window.supabase.createClient === 'function');
+        elDetailClientSdk.textContent = hasSdk ? 'SDK: Loaded (@supabase/supabase-js v2)' : 'SDK: CDN Not Loaded / Offline';
+
+        if (window.StudyFlowSupabase && window.StudyFlowSupabase.isConfigured()) {
+          const client = window.StudyFlowSupabase.getClient();
+          if (client) {
+            elBadgeClient.className = 'badge badge-success';
+            elBadgeClient.textContent = 'Initialized';
+            elValClient.textContent = 'Client Active';
+            elDetailClientMode.textContent = 'Mode: Supabase Cloud Connected';
+          } else {
+            elBadgeClient.className = 'badge badge-warning';
+            elBadgeClient.textContent = 'Failed';
+            elValClient.textContent = 'Init Incomplete';
+            elDetailClientMode.textContent = 'Mode: Falling back to localStorage';
+          }
+        } else {
+          elBadgeClient.className = 'badge badge-neutral';
+          elBadgeClient.textContent = 'Idle';
+          elValClient.textContent = 'Local-Only Mode';
+          elDetailClientMode.textContent = 'Mode: 100% Offline (v1.5.0 Local)';
+        }
+
+        // 3. Check Auth session asynchronously
+        checkAuthSession();
+      }
+
+      async function checkAuthSession() {
+        if (!window.StudyFlowSupabase || !window.StudyFlowSupabase.isConfigured()) {
+          elBadgeAuth.className = 'badge badge-neutral';
+          elBadgeAuth.textContent = 'Local-Only';
+          elValAuth.textContent = 'No Cloud Auth';
+          elDetailAuth.textContent = 'App runs locally via localStorage without authentication.';
+          return;
+        }
+
+        const client = window.StudyFlowSupabase.getClient();
+        if (!client) {
+          elBadgeAuth.className = 'badge badge-warning';
+          elBadgeAuth.textContent = 'Unavailable';
+          elValAuth.textContent = 'Client Inactive';
+          return;
+        }
+
+        try {
+          const { data, error } = await client.auth.getSession();
+          if (error) {
+            elBadgeAuth.className = 'badge badge-danger';
+            elBadgeAuth.textContent = 'Auth Error';
+            elValAuth.textContent = 'Session Query Failed';
+            elDetailAuth.textContent = error.message;
+          } else if (data && data.session) {
+            elBadgeAuth.className = 'badge badge-success';
+            elBadgeAuth.textContent = 'Active Session';
+            elValAuth.textContent = 'User Authenticated';
+            elDetailAuth.textContent = `User ID: ${data.session.user.id}`;
+          } else {
+            elBadgeAuth.className = 'badge badge-success';
+            elBadgeAuth.textContent = 'Unauthenticated';
+            elValAuth.textContent = 'Unauthenticated (Expected)';
+            elDetailAuth.textContent = 'All tables securely isolated by RLS. No session active.';
+          }
+        } catch (e) {
+          elBadgeAuth.className = 'badge badge-danger';
+          elBadgeAuth.textContent = 'Exception';
+          elValAuth.textContent = 'Auth Check Failed';
+          elDetailAuth.textContent = e.message;
+        }
+      }
+
+      function addLog(msg, type = 'info') {
+        const row = document.createElement('div');
+        row.className = `log-row log-${type}`;
+        row.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+        elConsole.appendChild(row);
+        elConsole.scrollTop = elConsole.scrollHeight;
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      async function runTests() {
+        elConsole.innerHTML = '';
+        elBtnRun.disabled = true;
+        elSpinner.style.display = 'inline';
+        elSummaryBadge.className = 'badge badge-warning';
+        elSummaryBadge.textContent = 'Running...';
+
+        addLog('Starting test execution: ' + new Date().toLocaleTimeString(), 'info');
+
+        if (!window.StudyFlowSupabaseTest) {
+          addLog('ERROR: js/supabase-test.js module not loaded.', 'fail');
+          elSummaryBadge.className = 'badge badge-danger';
+          elSummaryBadge.textContent = 'Runner Missing';
+          elBtnRun.disabled = false;
+          elSpinner.style.display = 'none';
+          return;
+        }
+
+        try {
+          const results = await window.StudyFlowSupabaseTest.run({ verbose: false });
+
+          results.steps.forEach(step => {
+            if (step.isWarning) {
+              addLog(`⚠️ [Notice] ${step.name}: ${step.detail}`, 'warn');
+            } else if (step.passed) {
+              addLog(`✓ [Pass] ${step.name}${step.detail ? ` (${step.detail})` : ''}`, 'pass');
+            } else {
+              addLog(`✗ [Fail] ${step.name}: ${step.detail}`, 'fail');
+            }
+          });
+
+          if (results.failed === 0) {
+            elSummaryBadge.className = 'badge badge-success';
+            elSummaryBadge.textContent = results.warnings > 0 ? `${results.passed} Passed (${results.warnings} Notices)` : 'All Passed';
+            addLog(`\n✓ All checks completed successfully. (${results.passed} passed, ${results.warnings} notices)`, 'pass');
+          } else {
+            elSummaryBadge.className = 'badge badge-danger';
+            elSummaryBadge.textContent = `${results.failed} Failed`;
+            addLog(`\n✗ Tests completed with ${results.failed} failure(s).`, 'fail');
+          }
+        } catch (err) {
+          addLog(`\n✗ Unexpected runner failure: ${err.message}`, 'fail');
+          elSummaryBadge.className = 'badge badge-danger';
+          elSummaryBadge.textContent = 'Error';
+        } finally {
+          elBtnRun.disabled = false;
+          elSpinner.style.display = 'none';
+          updateDashboardState();
+        }
+      }
+
+      elBtnRun.addEventListener('click', runTests);
+      elBtnClear.addEventListener('click', () => {
+        elConsole.innerHTML = '<div class="log-row log-info"><span>[Info] Output cleared.</span></div>';
+        elSummaryBadge.className = 'badge badge-neutral';
+        elSummaryBadge.textContent = 'Ready';
+      });
+
+      // Initial inspection on page load
+      updateDashboardState();
+    })();
+  </script>
+</body>
+</html>

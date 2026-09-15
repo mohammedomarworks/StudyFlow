@@ -40,7 +40,8 @@ runTest('1. All HTML pages exist and script src paths resolve to physical files'
     'pages/notes.html',
     'pages/settings.html',
     'pages/about.html',
-    'pages/habits.html'
+    'pages/habits.html',
+    'supabase-test.html'
   ];
 
   for (const relHtml of htmlFiles) {
