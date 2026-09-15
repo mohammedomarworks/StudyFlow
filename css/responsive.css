@@ -6,17 +6,8 @@
    Breakpoints: 1024px (tablet-landscape) · 768px (tablet) · 560px (phone)
    ========================================================================== */
 
-/* ---- <= 1024px : tighten dashboard + stats ------------------------------- */
+/* ---- <= 1024px : tablet-landscape + mobile navbar (hamburger) ----------- */
 @media (max-width: 1024px) {
-  .dash-grid { grid-template-columns: 1fr; }
-  .stats-grid { grid-template-columns: repeat(2, 1fr); }
-  .analytics-summary-grid { grid-template-columns: repeat(2, 1fr); }
-  .habit-summary-grid { grid-template-columns: repeat(2, 1fr); }
-  .timer-view-grid { grid-template-columns: 1fr; }
-}
-
-/* ---- <= 768px : mobile navbar (hamburger) + single-column layouts -------- */
-@media (max-width: 768px) {
   :root { --navbar-h: 62px; }
 
   .navbar__inner { padding-inline: var(--space-4); }
@@ -48,12 +39,25 @@
     opacity: 1;
     pointer-events: auto;
   }
-  .nav-links a { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); }
+  .nav-links a {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    font-size: var(--fs-sm);
+  }
 
   .nav-search-btn span { display: none; }
   .nav-search-btn kbd { display: none; }
   .nav-search-btn { padding: 8px; border-radius: 12px; }
 
+  .dash-grid { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .analytics-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .habit-summary-grid { grid-template-columns: repeat(2, 1fr); }
+  .timer-view-grid { grid-template-columns: 1fr; }
+}
+
+/* ---- <= 768px : tablet portrait & single-column layouts ------------------ */
+@media (max-width: 768px) {
   .form-row,
   .form-row-3 { grid-template-columns: 1fr; }
 
@@ -99,7 +103,8 @@
   .brand__mark svg { width: 18px; height: 18px; }
   .theme-toggle,
   .nav-toggle,
-  .nav-search-btn { width: 36px; height: 36px; min-width: 36px; padding: 0; display: grid; place-items: center; }
+  .nav-search-btn,
+  .nav-auth-btn { width: 36px; height: 36px; min-width: 36px; padding: 0; display: grid; place-items: center; border-radius: 12px; }
 
   .stats-grid { grid-template-columns: 1fr; gap: var(--space-3); }
   #overallTiles.stats-grid { grid-template-columns: 1fr; }
@@ -205,15 +210,28 @@
   .note-card__head { flex-direction: column; gap: var(--space-2); }
   .note-card .task-item__actions { align-self: flex-end; }
 
+  /* Navbar small phone adjustments */
+  .navbar__inner { gap: var(--space-2); }
+  .nav-actions { gap: 6px; }
+
   /* Auth phone adjustments */
   .nav-user-name { display: none; }
   .nav-user-btn { padding: 3px 6px; }
+  .nav-auth-btn span { display: none; }
   .auth-card { padding: 24px 16px; }
   .auth-tabs .auth-tab { padding: 8px 12px; font-size: var(--fs-xs); }
 }
 
 /* ---- <= 320px : ultra-small screens ------------------------------------- */
 @media (max-width: 320px) {
+  .brand span { display: none; }
+  .theme-toggle,
+  .nav-toggle,
+  .nav-search-btn,
+  .nav-auth-btn { width: 32px; height: 32px; min-width: 32px; border-radius: 10px; }
+  .nav-user-btn { height: 32px; padding: 2px 4px; }
+  .user-avatar-badge { width: 24px; height: 24px; font-size: 0.7rem; }
+
   .cal-card { padding: 4px; }
   .cal-grid { gap: 2px; }
   .cal-weekdays { gap: 2px; }

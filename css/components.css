@@ -19,13 +19,13 @@
 }
 .navbar__inner {
   height: 100%;
-  max-width: var(--container);
+  max-width: var(--container-nav, 1400px);
   margin-inline: auto;
   padding-inline: var(--space-5);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 /* Brand / logo */
@@ -37,6 +37,7 @@
   font-size: var(--fs-lg);
   color: var(--text);
   letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 .brand__mark {
   width: 40px;
@@ -47,6 +48,7 @@
   background: var(--gradient);
   color: #fff;
   box-shadow: var(--shadow-primary);
+  flex-shrink: 0;
 }
 .brand__mark svg { width: 22px; height: 22px; }
 .brand span b { color: var(--primary); }
@@ -55,22 +57,29 @@
 .nav-links {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 2px;
+  flex-shrink: 0;
 }
 .nav-links a {
   position: relative;
-  padding: var(--space-2) var(--space-4);
+  padding: 6px 12px;
   border-radius: var(--radius-pill);
-  font-size: var(--fs-sm);
+  font-size: 0.8125rem;
   font-weight: 600;
   color: var(--text-muted);
+  white-space: nowrap;
   transition: color var(--transition-fast), background var(--transition-fast);
 }
 .nav-links a:hover { color: var(--text); background: var(--surface-2); }
 .nav-links a.active { color: var(--primary); background: var(--primary-soft); }
 
 /* Right-side controls */
-.nav-actions { display: flex; align-items: center; gap: var(--space-2); }
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
 
 /* Theme toggle button */
 .theme-toggle {
@@ -1144,6 +1153,7 @@ kbd, .kbd-badge {
 .nav-auth {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 .nav-auth-btn {
   display: inline-flex;
@@ -1155,12 +1165,15 @@ kbd, .kbd-badge {
   font-weight: 600;
   font-size: var(--fs-xs);
   text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .nav-auth-btn svg { width: 15px; height: 15px; }
 
 /* User Account Menu in Navbar */
 .nav-user-menu {
   position: relative;
+  flex-shrink: 0;
 }
 .nav-user-btn {
   display: flex;
@@ -1174,6 +1187,8 @@ kbd, .kbd-badge {
   color: var(--text);
   cursor: pointer;
   transition: background var(--transition-fast), border-color var(--transition-fast);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .nav-user-btn:hover,
 .nav-user-menu.open .nav-user-btn {

@@ -12,8 +12,16 @@ const App = {
   /* ======================= PATH RESOLVER =============================== */
   /** Resolve relative paths depending on whether we are at root or in /pages/ */
   isSubpage() {
-    return window.location.pathname.includes('/pages/') ||
-           document.body.dataset.page !== 'dashboard';
+    if (typeof window !== 'undefined' && window.location && window.location.pathname) {
+      if (window.location.pathname.includes('/pages/')) return true;
+    }
+    if (typeof document !== 'undefined' && document.body && document.body.dataset) {
+      const page = document.body.dataset.page;
+      if (page && page !== 'dashboard') {
+        return true;
+      }
+    }
+    return false;
   },
 
   path(target) {
@@ -140,7 +148,7 @@ const App = {
 
   /* ========================== NAVBAR =================================== */
   initNavbar() {
-    const page = document.body.dataset.page;
+    const page = document.body && document.body.dataset ? document.body.dataset.page : null;
     this.qsa('.nav-links a').forEach(a => {
       if (a.dataset.nav === page) a.classList.add('active');
     });
@@ -151,10 +159,10 @@ const App = {
     if (toggle && links) {
       toggle.addEventListener('click', () => {
         const isOpen = links.classList.toggle('open');
-        toggle.setAttribute('aria-expanded', isOpen);
+        toggle.setAttribute('aria-expanded', String(isOpen));
       });
       links.addEventListener('click', e => {
-        if (e.target.tagName === 'A') {
+        if (e.target.closest('a')) {
           links.classList.remove('open');
           toggle.setAttribute('aria-expanded', 'false');
         }
