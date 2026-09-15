@@ -84,6 +84,10 @@
 
   /* Habits at tablet */
   .habit-cards-grid { grid-template-columns: 1fr; }
+
+  /* Auth at tablet */
+  .auth-card { padding: 28px 20px; }
+  .account-details-grid { grid-template-columns: 1fr; }
 }
 
 /* ---- <= 560px : phones --------------------------------------------------- */
@@ -200,6 +204,12 @@
   .note-detail-content { font-size: var(--fs-sm); }
   .note-card__head { flex-direction: column; gap: var(--space-2); }
   .note-card .task-item__actions { align-self: flex-end; }
+
+  /* Auth phone adjustments */
+  .nav-user-name { display: none; }
+  .nav-user-btn { padding: 3px 6px; }
+  .auth-card { padding: 24px 16px; }
+  .auth-tabs .auth-tab { padding: 8px 12px; font-size: var(--fs-xs); }
 }
 
 /* ---- <= 320px : ultra-small screens ------------------------------------- */
@@ -215,4 +225,9 @@
   /* Notes ultra-small screen adjustments */
   .note-card { padding: var(--space-3); }
   .note-card__foot { flex-direction: column; align-items: flex-start; gap: 4px; }
+
+  /* Auth ultra-small screen adjustments */
+  .auth-card { padding: 18px 12px; }
+  .auth-title { font-size: var(--fs-lg); }
+  .auth-tabs .auth-tab { padding: 6px 8px; font-size: 0.72rem; }
 }

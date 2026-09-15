@@ -75,6 +75,30 @@
         <p>Personalize your study experience, configure focus timers, manage data backups, and review keyboard shortcuts.</p>
       </div>
 
+      <!-- 0. Account & Cloud Identity Card (Phase B) -->
+      <div class="card settings-card mb-6" id="sectionAccount">
+        <div class="card__head">
+          <h2 class="card__title">Account & Cloud Identity</h2>
+          <span class="badge badge-muted" id="accountStatusBadge">Checking...</span>
+        </div>
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Manage your StudyFlow cloud authentication status and connection identity.</p>
+        <div class="account-card-body" id="accountCardBody">
+          <!-- Dynamically populated by js/settings.js -->
+        </div>
+      </div>
+
+      <!-- 0b. Cloud Data & Migration Card (Phase C) -->
+      <div class="card settings-card mb-6" id="sectionMigration" style="display:none">
+        <div class="card__head">
+          <h2 class="card__title">Cloud Planner Data & Migration</h2>
+          <span class="badge badge-muted" id="migrationStatusBadge">Local Storage</span>
+        </div>
+        <p class="text-muted mb-4" style="font-size:var(--fs-sm)">Safely migrate your existing browser tasks, subjects, habits, and notes to your authenticated Supabase cloud account.</p>
+        <div id="migrationCardBody">
+          <!-- Dynamically populated by js/settings.js -->
+        </div>
+      </div>
+
       <!-- 1. Appearance / Theme Card -->
       <div class="card settings-card mb-6" id="sectionAppearance">
         <div class="card__head">
@@ -414,9 +438,92 @@
     </div>
   </div>
 
+  <!-- ===================== MIGRATION PREVIEW MODAL ===================== -->
+  <div class="modal-overlay" id="migrationPreviewModal" role="dialog" aria-modal="true" aria-labelledby="migrationPreviewTitle">
+    <div class="modal" style="max-width:560px">
+      <div class="modal__head">
+        <h3 id="migrationPreviewTitle">Preview Cloud Data Migration</h3>
+        <button class="icon-btn" data-close aria-label="Close dialog">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal__body">
+        <div class="alert alert-info mb-4" style="font-size:var(--fs-xs);padding:var(--space-3);background:color-mix(in srgb, var(--primary) 10%, var(--surface));border:1px solid var(--primary-soft);border-radius:var(--radius-sm);color:var(--text)">
+          <b>🛡️ Safety Guarantee:</b> Migrating uploads your local planner data to your secure Supabase account. <b>Your local browser data remains completely safe and untouched</b> as an offline backup.
+        </div>
+
+        <div id="migrationMetaInfo" class="text-muted mb-3" style="font-size:var(--fs-xs)"></div>
+
+        <table class="import-preview-table" aria-label="Cloud migration preview">
+          <thead>
+            <tr>
+              <th>Entity</th>
+              <th>Count</th>
+              <th>Destination</th>
+            </tr>
+          </thead>
+          <tbody id="migrationPreviewBody">
+            <!-- Dynamically populated -->
+          </tbody>
+        </table>
+
+        <div class="mt-4 p-3 rounded" style="background:var(--surface-sunken);font-size:var(--fs-xs);border:1px solid var(--border)">
+          <div style="font-weight:600;margin-bottom:var(--space-1)">Referential Integrity & Security:</div>
+          <ul style="padding-left:1.2rem;margin:0;color:var(--text-muted)">
+            <li>Subjects, Tasks, Habits, and Notes IDs are safely remapped to PostgreSQL UUIDs.</li>
+            <li>All relationships (tasks to subjects, habits to streaks, etc.) are strictly preserved.</li>
+            <li>Protected by Supabase Row Level Security (RLS) — accessible only by your account.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="modal__foot">
+        <button type="button" class="btn btn-ghost" data-close id="cancelMigrationBtn">Cancel</button>
+        <button type="button" class="btn btn-primary" id="startMigrationBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Migrate to Cloud
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MIGRATION PROGRESS MODAL ===================== -->
+  <div class="modal-overlay" id="migrationProgressModal" role="dialog" aria-modal="true" aria-labelledby="migrationProgressTitle">
+    <div class="modal" style="max-width:480px">
+      <div class="modal__head">
+        <h3 id="migrationProgressTitle">Migrating Data to Cloud</h3>
+      </div>
+      <div class="modal__body">
+        <div class="mb-3 text-center">
+          <div id="migrationProgressSpinner" class="spinner mb-3" style="margin:0 auto;width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin 1s linear infinite"></div>
+          <div id="migrationProgressStage" style="font-weight:600;font-size:var(--fs-sm)">Preparing migration...</div>
+          <div id="migrationProgressDetail" class="text-muted mt-1" style="font-size:var(--fs-xs)">Please do not close this window.</div>
+        </div>
+
+        <div style="background:var(--border);height:8px;border-radius:4px;overflow:hidden;margin-bottom:var(--space-3)">
+          <div id="migrationProgressBar" style="width:0%;height:100%;background:var(--primary);transition:width 0.3s ease"></div>
+        </div>
+
+        <div id="migrationProgressError" class="alert alert-danger" style="display:none;font-size:var(--fs-xs);padding:var(--space-2)"></div>
+      </div>
+      <div class="modal__foot" id="migrationProgressFoot" style="display:none">
+        <button type="button" class="btn btn-ghost" data-close id="closeMigrationProgressBtn">Dismiss</button>
+        <button type="button" class="btn btn-primary" id="retryMigrationBtn">Retry Migration</button>
+      </div>
+    </div>
+  </div>
+
   <footer class="footer">Made with <b>StudyFlow</b> · © <span data-year></span></footer>
 
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/supabase-config.local.js" onerror="console.info('supabase-config.local.js not found; using base config')"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase.js"></script>
+  <script src="../js/auth.js"></script>
   <script src="../js/storage.js"></script>
+  <script src="../js/repository.js"></script>
+  <script src="../js/migration.js"></script>
+  <script src="../js/realtime.js"></script>
+  <script src="../js/sync-queue.js"></script>
   <script src="../js/app.js"></script>
   <script src="../js/settings.js"></script>
 </body>
