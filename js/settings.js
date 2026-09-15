@@ -33,9 +33,34 @@ function initAccountSection() {
   const migrationBody = App.qs('#migrationCardBody');
   if (!badge || !body) return;
 
+  function getRealtimeBadgeClass(status) {
+    const s = status || (window.StudyFlowRealtime ? window.StudyFlowRealtime.getStatus() : 'disconnected');
+    if (s === 'connected') return 'badge-success';
+    if (s === 'connecting' || s === 'reconnecting') return 'badge-warning';
+    if (s === 'error') return 'badge-danger';
+    return 'badge-muted';
+  }
+
+  function getRealtimeBadgeText(status) {
+    const s = status || (window.StudyFlowRealtime ? window.StudyFlowRealtime.getStatus() : 'disconnected');
+    if (s === 'connected') return '● Realtime Sync Connected';
+    if (s === 'connecting') return '○ Connecting…';
+    if (s === 'reconnecting') return '○ Reconnecting…';
+    if (s === 'error') return '○ Sync Error';
+    if (s === 'paused') return '⏸ Sync Paused';
+    return '○ Offline';
+  }
+
+  function getRealtimeLastSyncedText(lastSynced) {
+    const ls = lastSynced || (window.StudyFlowRealtime ? window.StudyFlowRealtime.getLastSynced() : null);
+    if (!ls) return 'Sync standby';
+    return `Last synced: ${Dates.timeAgo(ls)}`;
+  }
+
   function renderAccount(event, session, user, state) {
     const MigrationService = window.StudyFlowMigration;
     const RepoFactory = window.StudyFlowRepository ? window.StudyFlowRepository.RepositoryFactory : null;
+    const Realtime = window.StudyFlowRealtime;
 
     if (!window.Auth) {
       badge.className = 'badge badge-muted';
@@ -109,6 +134,7 @@ function initAccountSection() {
       const signOutBtn = body.querySelector('#settingsSignOutBtn');
       if (signOutBtn) {
         signOutBtn.addEventListener('click', async () => {
+          if (Realtime) await Realtime.destroy();
           if (RepoFactory) RepoFactory.setMode('local');
           await window.Auth.signOut();
           App.toast('Signed out successfully. Your local planner data remains intact.', 'info');
@@ -128,6 +154,19 @@ function initAccountSection() {
             <div class="alert alert-success mb-4" style="font-size:var(--fs-xs);padding:var(--space-3);background:color-mix(in srgb, var(--success) 10%, var(--surface));border:1px solid var(--success);border-radius:var(--radius-sm);color:var(--text)">
               <b>✓ Cloud Connected:</b> Planner data was successfully migrated on ${formattedMigrationDate || 'recent date'}. All new changes are securely stored in your Supabase cloud account.
             </div>
+
+            ${currentMode === 'cloud' ? `
+            <div class="settings-row mb-3" id="realtimeStatusRow">
+              <div class="settings-row__info">
+                <div class="settings-row__title">Realtime Multi-Device Sync</div>
+                <div class="settings-row__desc">Live synchronization across open clients and browser tabs.</div>
+              </div>
+              <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+                <span class="badge ${getRealtimeBadgeClass()}" id="realtimeStatusBadge">${getRealtimeBadgeText()}</span>
+                <small class="text-muted" id="realtimeLastSyncedText" style="font-size:var(--fs-xs)">${getRealtimeLastSyncedText()}</small>
+              </div>
+            </div>
+            ` : ''}
 
             <div class="settings-row mb-3">
               <div class="settings-row__info">
@@ -347,6 +386,20 @@ function initAccountSection() {
     });
   } else {
     renderAccount('NO_AUTH', null, null, 'unauthenticated');
+  }
+
+  if (window.StudyFlowRealtime && typeof window.StudyFlowRealtime.onStatusChange === 'function') {
+    window.StudyFlowRealtime.onStatusChange((status, lastSynced) => {
+      const statusBadge = App.qs('#realtimeStatusBadge');
+      const lastSyncedText = App.qs('#realtimeLastSyncedText');
+      if (statusBadge) {
+        statusBadge.className = `badge ${getRealtimeBadgeClass(status)}`;
+        statusBadge.textContent = getRealtimeBadgeText(status);
+      }
+      if (lastSyncedText) {
+        lastSyncedText.textContent = getRealtimeLastSyncedText(lastSynced);
+      }
+    });
   }
 }
 

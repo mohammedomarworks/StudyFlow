@@ -1,6 +1,6 @@
 # StudyFlow v2.0 Architecture & Supabase Foundation
 
-> **Current Status**: Phase C — Local Data Migration & Cloud CRUD
+> **Current Status**: Phase D — Realtime Synchronization & Conflict Handling
 > **Target Release**: StudyFlow v2.0
 > **Stable Release**: StudyFlow v1.5.0
 > **Active Git Branch**: `feature/v2-foundation`
@@ -396,8 +396,72 @@ When connecting a new Supabase project:
    node tests/migration.test.js
    ```
    Verifies 10 migration, CloudRepository CRUD, idempotency, and isolation test cases.
-6. **JavaScript Syntax Check**:
+6. **Realtime Synchronization Suite (Phase D)**:
+   ```bash
+   node tests/realtime.test.js
+   ```
+   Verifies 16 Realtime manager lifecycle, event mapping, cache mutation, LWW conflict resolution, active form protection, and cross-user isolation test cases.
+7. **JavaScript Syntax Check**:
    ```bash
    node -c js/*.js
    ```
    Validates syntax across all JavaScript files.
+
+---
+
+## 8. Realtime Synchronization & Conflict Handling (Phase D)
+
+StudyFlow v2.0 Phase D implements multi-tab and multi-device live data synchronization for authenticated users in Cloud Mode.
+
+### Realtime Architecture Diagram
+
+```text
+  Client A (Device 1)                       Client B (Device 2)
+ ┌───────────────────────┐                 ┌───────────────────────┐
+ │  User edits Task      │                 │  Active View (Tasks)  │
+ └──────────┬────────────┘                 └───────────▲───────────┘
+            │                                          │ (studyflow:realtime-change)
+            ▼                                          │
+ ┌───────────────────────┐                 ┌───────────┴───────────┐
+ │ Store.saveTask()      │                 │ Realtime Manager      │
+ └──────────┬────────────┘                 │ (js/realtime.js)      │
+            │                                          ▲
+            ▼                                          │ (postgres_changes WebSocket)
+ ┌───────────────────────┐                 ┌───────────┴───────────┐
+ │ Supabase PostgREST    │───────────────► │ Supabase Realtime WS  │
+ │ (public.tasks UPDATE) │ (Replication)   │ (studyflow_realtime)  │
+ └───────────────────────┘                 └───────────────────────┘
+```
+
+### Core Design Principles
+
+1. **Single Reusable Channel**:
+   - Authenticated Cloud Mode clients maintain exactly ONE channel: `studyflow_realtime_${userId}`.
+   - Listens to `postgres_changes` across all 7 user-owned tables: `subjects`, `tasks`, `notes`, `habits`, `habit_completions`, `study_sessions`, `settings`.
+   - Filtered at the database/subscription level by `user_id=eq.${userId}`.
+
+2. **Cache Isolation & Zero Feedback Loops**:
+   - Inbound remote events mutate the client's isolated cloud cache (`sp_cloud_${tableKey}_${userId}`) directly via `Realtime.applyRemoteEvent`.
+   - Never calls `Store.save*()` or `CloudRepository.save*()`, completely eliminating circular write-back loops.
+   - Local backup `sp_*` storage remains strictly isolated and untouched.
+
+3. **Deterministic Last-Writer-Wins (LWW) Conflict Policy**:
+   - Every table uses server timestamps (`updated_at`, `completed_at`, `created_at`).
+   - `applyRemoteEvent` compares incoming entity timestamp against cached entity timestamp.
+   - If `incomingTimestamp < existingTimestamp`, the incoming event is rejected (`reason: 'stale_event'`) to prevent stale overwrites.
+   - If `incomingTimestamp >= existingTimestamp`, the incoming record updates the cache and emits a UI update event.
+
+4. **Active Form Editing Protection**:
+   - `Realtime.isUserActivelyEditing(table, recordId)` checks if an active modal (`#taskModal`, `#subjectModal`, `#noteModal`, `#habitModal`) is open with matching entity ID.
+   - Prevents active user inputs in dirty forms from being silently overwritten in the background.
+   - Triggers non-blocking warning toasts to notify the user of concurrent edits.
+
+5. **Lifecycle & Status Observability**:
+   - `Realtime.initialize()` binds to `Auth.onAuthStateChange` and `RepositoryFactory.onModeChange`.
+   - Automatically subscribes upon entering Cloud Mode; cleanly destroys channel upon sign-out or switching to Local Mode.
+   - Settings page displays live connection status badge (`● Realtime Sync Connected` / `○ Disconnected`) and formatted last synced time.
+
+6. **Phase D Explicit Limitations & Non-Goals**:
+   - **No Offline Write Queues**: Offline mutation queues are deferred to Phase E.
+   - **No Push Notifications**: No Web Push or Service Worker notification handlers.
+   - **No Multi-User Collaboration**: Synchronizes state between devices of the SAME authenticated user.

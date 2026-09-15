@@ -181,7 +181,8 @@
         teacher: row.teacher || '',
         color: row.color || '#7c3aed',
         examDate: row.exam_date || '',
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        updatedAt: row.updated_at || row.created_at
       };
     }
 
@@ -210,7 +211,8 @@
         completed: Boolean(row.completed),
         completedAt: row.completed_at || null,
         subjectId: row.subject_id || '',
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        updatedAt: row.updated_at || row.created_at
       };
     }
 
@@ -269,7 +271,8 @@
         targetDays: Array.isArray(row.target_days) ? row.target_days : [0, 1, 2, 3, 4, 5, 6],
         subjectId: row.subject_id || '',
         archived: Boolean(row.archived),
-        createdAt: row.created_at
+        createdAt: row.created_at,
+        updatedAt: row.updated_at || row.created_at
       };
     }
 
@@ -311,7 +314,8 @@
         type: row.type || 'focus',
         durationMinutes: Number(row.duration_minutes) || 25,
         notes: row.notes || '',
-        completedAt: row.completed_at
+        completedAt: row.completed_at,
+        createdAt: row.created_at || row.completed_at
       };
     }
 
@@ -339,7 +343,8 @@
         theme: ['light', 'dark', 'system'].includes(row.theme) ? row.theme : defaults.theme,
         pomodoro: { ...defaults.pomodoro, ...(row.pomodoro || {}) },
         preferences: { ...defaults.preferences, ...(row.preferences || {}) },
-        lastExportAt: row.last_export_at || null
+        lastExportAt: row.last_export_at || null,
+        updatedAt: row.updated_at || row.created_at
       };
     }
 

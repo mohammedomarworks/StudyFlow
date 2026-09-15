@@ -675,6 +675,11 @@ const App = {
             e.stopPropagation();
             if (userMenu) userMenu.classList.remove('open');
             if (userBtn) userBtn.setAttribute('aria-expanded', 'false');
+            if (window.StudyFlowRealtime) {
+              try {
+                await window.StudyFlowRealtime.destroy();
+              } catch {}
+            }
             if (repoModule && repoModule.RepositoryFactory) {
               repoModule.RepositoryFactory.setMode('local');
             }
@@ -731,6 +736,83 @@ const App = {
     }
   },
 
+  /* ==================== REALTIME SYNCHRONIZATION ======================= */
+  initRealtimeSync() {
+    const Realtime = window.StudyFlowRealtime;
+    if (!Realtime) return;
+
+    const RepoFactory = window.StudyFlowRepository ? window.StudyFlowRepository.RepositoryFactory : null;
+
+    const syncRealtimeState = (user, state) => {
+      const mode = RepoFactory ? RepoFactory.getMode() : 'local';
+      if (user && state === 'authenticated' && mode === 'cloud') {
+        Realtime.initialize(user);
+        Realtime.subscribe().catch(err => {
+          console.warn('StudyFlow Realtime subscription notice:', err);
+        });
+      } else {
+        Realtime.unsubscribe();
+      }
+    };
+
+    if (RepoFactory && typeof RepoFactory.onModeChange === 'function') {
+      RepoFactory.onModeChange((mode, userId) => {
+        const user = window.Auth ? window.Auth.getUser() : null;
+        if (mode === 'cloud' && (userId || (user && user.id))) {
+          Realtime.initialize(user || { id: userId });
+          Realtime.subscribe().catch(err => {
+            console.warn('StudyFlow Realtime subscription notice:', err);
+          });
+        } else {
+          Realtime.unsubscribe();
+        }
+      });
+    }
+
+    if (window.Auth) {
+      window.Auth.onAuthStateChange((event, session, user, state) => {
+        if (event === 'SIGNED_OUT' || state === 'unauthenticated') {
+          Realtime.destroy();
+        } else {
+          syncRealtimeState(user, state);
+        }
+      });
+
+      window.Auth.init().then(res => {
+        syncRealtimeState(res.user, res.state);
+      });
+    }
+
+    // Refresh active views smoothly when cloud changes arrive
+    window.addEventListener('studyflow:realtime-change', (e) => {
+      const detail = e.detail || {};
+
+      if (detail.isEditing) {
+        this.toast('The item you are editing was updated remotely.', 'info');
+      }
+
+      // Page-specific reactive re-renders
+      try {
+        if (typeof renderAllDashboardData === 'function') {
+          renderAllDashboardData();
+        } else if (typeof renderAllHabitsData === 'function') {
+          renderAllHabitsData();
+        } else if (typeof renderAllAnalytics === 'function') {
+          renderAllAnalytics(typeof currentRange !== 'undefined' ? currentRange : 'week');
+        } else if (typeof renderOverview === 'function' && typeof renderTodaySessions === 'function') {
+          renderOverview();
+          renderTodaySessions();
+        } else if (typeof renderDiagnostics === 'function') {
+          renderDiagnostics();
+        } else if (typeof render === 'function') {
+          render();
+        }
+      } catch (rErr) {
+        console.warn('StudyFlow reactive view refresh notice:', rErr);
+      }
+    });
+  },
+
   /* ========================= INIT ===================================== */
   init() {
     this.initThemeListener();
@@ -738,6 +820,7 @@ const App = {
     this.initNavbar();
     this.initGlobalSearch();
     this.initAuthNav();
+    this.initRealtimeSync();
 
     // Global Escape closes any open modal
     document.addEventListener('keydown', e => {
