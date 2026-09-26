@@ -323,6 +323,160 @@ await runTest('20. service-worker.js implements openPanelOnActionClick', () => {
   assert(!swCode.includes('openPanelOnActionIconClick'), 'must not use typo openPanelOnActionIconClick');
 });
 
+// ==========================================================================
+// Focus Mode timer tests (21–35) — exercise the pure state machine in
+// src/shared/focus-timer.js. All time-dependent calls inject a fixed `now`.
+// ==========================================================================
+
+const ft = await import('../src/shared/focus-timer.js');
+const T0 = 1_700_000_000_000; // fixed reference timestamp
+const FOCUS_MS = 25 * 60000;
+
+// 21. Default READY state is 25:00 focus
+await runTest('21. createReadyState defaults to a 25:00 focus session', () => {
+  const s = ft.createReadyState('focus', ft.DEFAULT_DURATIONS, 'user-1');
+  assert.strictEqual(s.status, 'ready');
+  assert.strictEqual(s.mode, 'focus');
+  assert.strictEqual(s.durationMs, FOCUS_MS);
+  assert.strictEqual(ft.formatMMSS(ft.getRemainingMs(s, T0)), '25:00');
+});
+
+// 22. startTimer sets a running state with a future endTime
+await runTest('22. startTimer produces a running state with endTime = now + duration', () => {
+  const ready = ft.createReadyState('focus', ft.DEFAULT_DURATIONS, 'user-1');
+  const s = ft.startTimer(ready, { sessionId: 'sess-1', userId: 'user-1' }, T0);
+  assert.strictEqual(s.status, 'running');
+  assert.strictEqual(s.endTime, T0 + FOCUS_MS);
+  assert.strictEqual(s.sessionId, 'sess-1');
+  assert.strictEqual(s.completionWritten, false);
+});
+
+// 23. Pause freezes remaining time
+await runTest('23. pauseTimer freezes the remaining time and clears endTime', () => {
+  const running = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's' }, T0);
+  const paused = ft.pauseTimer(running, T0 + 60000); // 1 min elapsed
+  assert.strictEqual(paused.status, 'paused');
+  assert.strictEqual(paused.endTime, null);
+  assert.strictEqual(paused.remainingMs, FOCUS_MS - 60000);
+});
+
+// 24. Resume projects a new endTime from remaining
+await runTest('24. resumeTimer projects a fresh endTime from the frozen remaining time', () => {
+  const running = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's' }, T0);
+  const paused = ft.pauseTimer(running, T0 + 60000);
+  const resumed = ft.resumeTimer(paused, T0 + 5_000_000); // resumed much later
+  assert.strictEqual(resumed.status, 'running');
+  assert.strictEqual(resumed.endTime, T0 + 5_000_000 + (FOCUS_MS - 60000));
+});
+
+// 25. Reset returns to READY and clears the session id
+await runTest('25. resetTimer returns to READY, clears sessionId, preserves subject/task', () => {
+  let s = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's', subjectId: 'sub-1', taskId: 'task-1' }, T0);
+  s = ft.resetTimer(s, ft.DEFAULT_DURATIONS);
+  assert.strictEqual(s.status, 'ready');
+  assert.strictEqual(s.sessionId, null);
+  assert.strictEqual(s.subjectId, 'sub-1');
+  assert.strictEqual(s.taskId, 'task-1');
+  assert.strictEqual(s.remainingMs, FOCUS_MS);
+});
+
+// 26. Remaining time is timestamp-derived, not decremented
+await runTest('26. getRemainingMs is derived from endTime - now (timestamp-based)', () => {
+  const running = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's' }, T0);
+  assert.strictEqual(ft.getRemainingMs(running, T0 + 600000), FOCUS_MS - 600000);
+  // Never negative
+  assert.strictEqual(ft.getRemainingMs(running, T0 + FOCUS_MS + 999999), 0);
+});
+
+// 27. State object is serializable for chrome.storage.local persistence
+await runTest('27. timer state round-trips through JSON (persistence-safe)', () => {
+  const running = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's', userId: 'user-1' }, T0);
+  const restored = JSON.parse(JSON.stringify(running));
+  assert.deepStrictEqual(restored, running);
+  // And carries NO credential-like fields.
+  const keys = Object.keys(restored);
+  for (const k of ['password', 'token', 'access_token', 'refresh_token', 'apiKey']) {
+    assert(!keys.includes(k), `timer state must not contain ${k}`);
+  }
+});
+
+// 28. Restore-after-reopen recomputes remaining from timestamps
+await runTest('28. a restored running state recomputes remaining time from now', () => {
+  const running = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's' }, T0);
+  const restored = JSON.parse(JSON.stringify(running));
+  // 10 minutes passed while the panel was closed.
+  assert.strictEqual(ft.getRemainingMs(restored, T0 + 600000), FOCUS_MS - 600000);
+  assert.strictEqual(ft.isExpired(restored, T0 + 600000), false);
+});
+
+// 29. isExpired detects a session that ended while the panel was closed
+await runTest('29. isExpired is true once endTime has passed', () => {
+  const running = ft.startTimer(ft.createReadyState('focus'), { sessionId: 's' }, T0);
+  assert.strictEqual(ft.isExpired(running, T0 + FOCUS_MS - 1), false);
+  assert.strictEqual(ft.isExpired(running, T0 + FOCUS_MS), true);
+  assert.strictEqual(ft.isExpired(running, T0 + FOCUS_MS + 60000), true);
+});
+
+// 30. Completion is idempotent and persists exactly once
+await runTest('30. completion writes exactly once (shouldPersist flips to false)', () => {
+  let s = ft.startTimer(ft.createReadyState('focus', ft.DEFAULT_DURATIONS, 'user-1'), { sessionId: 'sess-1', userId: 'user-1' }, T0);
+  s = ft.completeTimer(s);
+  assert.strictEqual(s.status, 'completed');
+  assert.strictEqual(ft.shouldPersistSession(s), true, 'first completion should persist');
+  s = ft.markSessionWritten(s);
+  assert.strictEqual(ft.shouldPersistSession(s), false, 'must not persist a second time');
+  // Re-completing an already-completed state is a no-op.
+  assert.strictEqual(ft.completeTimer(s).status, 'completed');
+});
+
+// 31. Session payload matches study_sessions schema/semantics
+await runTest('31. buildSessionPayload produces the correct study_sessions shape', () => {
+  let s = ft.startTimer(ft.createReadyState('focus', ft.DEFAULT_DURATIONS, 'user-1'),
+    { sessionId: 'sess-1', subjectId: 'sub-1', taskId: 'task-1', userId: 'user-1' }, T0);
+  s = ft.completeTimer(s);
+  const payload = ft.buildSessionPayload(s);
+  assert.strictEqual(payload.id, 'sess-1');
+  assert.strictEqual(payload.type, 'focus');
+  assert.strictEqual(payload.durationMinutes, 25);
+  assert.strictEqual(payload.subjectId, 'sub-1');
+  assert.strictEqual(payload.taskId, 'task-1');
+  assert(typeof payload.completedAt === 'string' && payload.completedAt.includes('T'), 'completedAt is an ISO timestamp');
+});
+
+// 32. Signed-out completion is never persisted to the cloud
+await runTest('32. a completed session with no userId is not persisted', () => {
+  let s = ft.startTimer(ft.createReadyState('focus', ft.DEFAULT_DURATIONS, null), { sessionId: 'sess-x' }, T0);
+  s = ft.completeTimer(s);
+  assert.strictEqual(ft.shouldPersistSession(s), false, 'no user → no cloud write');
+});
+
+// 33. Account-switch safety: a state belongs to exactly one user id
+await runTest('33. timer state carries its owning userId for account-switch isolation', () => {
+  const s = ft.startTimer(ft.createReadyState('focus', ft.DEFAULT_DURATIONS, 'user-1'), { sessionId: 's', userId: 'user-1' }, T0);
+  assert.strictEqual(s.userId, 'user-1');
+  // A different signed-in user must not match this persisted state.
+  assert.notStrictEqual(s.userId, 'user-2');
+});
+
+// 34. Break sessions are never persisted to study_sessions
+await runTest('34. break sessions do not create a study_sessions write', () => {
+  let s = ft.startTimer(ft.createReadyState('shortBreak', ft.DEFAULT_DURATIONS, 'user-1'),
+    { mode: 'shortBreak', durationMs: 5 * 60000, sessionId: null, userId: 'user-1' }, T0);
+  s = ft.completeTimer(s);
+  assert.strictEqual(ft.shouldPersistSession(s), false, 'breaks are local only');
+});
+
+// 35. No per-second decrement counter exists (timestamp model only)
+await runTest('35. focus-timer exposes no tick/decrement counter API (no runaway intervals)', () => {
+  const exported = Object.keys(ft.default || {});
+  for (const banned of ['tick', 'decrement', 'countdown', 'interval']) {
+    assert(!exported.includes(banned), `focus-timer must not export a ${banned} counter`);
+  }
+  // Duration normalization guards against bad cloud values.
+  const norm = ft.normalizeDurations({ focus: 0, shortBreak: -3, longBreak: 'x' });
+  assert.deepStrictEqual(norm, { focus: 25, shortBreak: 5, longBreak: 15 });
+});
+
 console.log('\n========================================');
 console.log(`Extension Test Results: ${passedCount} passed, ${failedCount} failed`);
 console.log('========================================\n');

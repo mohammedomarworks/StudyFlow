@@ -161,17 +161,56 @@
         </div>
       </section>
 
-      <!-- Focus Launcher Card -->
-      <section class="card focus-card">
-        <div class="focus-inner">
-          <div class="focus-meta">
-            <span class="focus-title">Focus</span>
-            <span class="focus-timer-display">25:00</span>
-          </div>
-          <a href="https://studyflow-productivity.netlify.app/pages/timer.html" id="startFocusBtn" class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
-            Start Focus
-          </a>
+      <!-- In-Panel Focus Timer Card -->
+      <section class="card focus-card" id="focusCard" aria-live="polite">
+        <div class="focus-header">
+          <span class="card-title">Focus</span>
+          <span id="focusStateBadge" class="focus-state-badge">READY</span>
         </div>
+
+        <div class="focus-timer-wrap">
+          <span id="focusTimerDisplay" class="focus-timer-display">25:00</span>
+        </div>
+
+        <!-- Completion message (hidden unless completed) -->
+        <p id="focusCompleteMsg" class="focus-complete-msg hidden">Focus session complete 🎉</p>
+        <p id="focusSaveNote" class="focus-save-note hidden"></p>
+
+        <!-- Optional subject/task selectors -->
+        <div class="focus-selectors" id="focusSelectors">
+          <select id="focusSubjectSelect" class="form-select form-select-sm" aria-label="Focus subject">
+            <option value="">No subject</option>
+          </select>
+          <select id="focusTaskSelect" class="form-select form-select-sm" aria-label="Focus task">
+            <option value="">No task</option>
+          </select>
+        </div>
+
+        <!-- Control buttons (toggled by state) -->
+        <div class="focus-controls">
+          <button type="button" id="focusStartBtn" class="btn btn-primary btn-sm">▶ Start Focus</button>
+          <button type="button" id="focusPauseBtn" class="btn btn-primary btn-sm hidden">⏸ Pause</button>
+          <button type="button" id="focusResumeBtn" class="btn btn-primary btn-sm hidden">▶ Resume</button>
+          <button type="button" id="focusResetBtn" class="btn btn-ghost btn-sm hidden">⏹ Reset</button>
+          <button type="button" id="focusBreakBtn" class="btn btn-outline btn-sm hidden">Start Break</button>
+        </div>
+
+        <!-- Compact duration settings -->
+        <details class="focus-settings" id="focusSettings">
+          <summary>Timer settings</summary>
+          <div class="focus-settings-grid">
+            <label>Focus
+              <input type="number" id="focusMinFocus" class="form-input form-input-sm" min="1" max="180" value="25" />
+            </label>
+            <label>Short break
+              <input type="number" id="focusMinShort" class="form-input form-input-sm" min="1" max="60" value="5" />
+            </label>
+            <label>Long break
+              <input type="number" id="focusMinLong" class="form-input form-input-sm" min="1" max="120" value="15" />
+            </label>
+          </div>
+          <button type="button" id="focusSaveSettingsBtn" class="btn btn-ghost btn-sm">Save settings</button>
+        </details>
       </section>
 
       <!-- Open StudyFlow Launcher Button -->

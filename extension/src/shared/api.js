@@ -387,6 +387,53 @@ export async function getSettings() {
 }
 
 /**
+ * Persists a completed focus session to the cloud `study_sessions` table.
+ *
+ * IDEMPOTENCY: the caller supplies a client-generated UUID `id`. We upsert with
+ * `onConflict: 'id'`, so re-running the same completion (panel reopen, reload,
+ * realtime echo) can never create a duplicate row — it matches the web app's
+ * `Store.saveSession` / repository `_toDbSession` conventions exactly.
+ *
+ * `user_id` is always taken from the authenticated session, never from input.
+ * Only fields that exist in the schema are written; nothing is fabricated.
+ */
+export async function saveStudySession(sessionData) {
+  const user = await requireUser();
+  const client = getSupabaseClient();
+
+  if (!sessionData || !sessionData.id || typeof sessionData.id !== 'string') {
+    throw new Error('A client-generated session id (UUID) is required for idempotent save.');
+  }
+
+  const payload = {
+    id: sessionData.id,
+    user_id: user.id,
+    type: sessionData.type === 'break' ? 'break' : 'focus',
+    duration_minutes: Math.max(1, Number(sessionData.durationMinutes) || 25),
+    subject_id: (sessionData.subjectId && typeof sessionData.subjectId === 'string' && sessionData.subjectId.trim())
+      ? sessionData.subjectId.trim()
+      : null,
+    task_id: (sessionData.taskId && typeof sessionData.taskId === 'string' && sessionData.taskId.trim())
+      ? sessionData.taskId.trim()
+      : null,
+    completed_at: sessionData.completedAt || new Date().toISOString()
+  };
+
+  const { data, error } = await client
+    .from('study_sessions')
+    .upsert(payload, { onConflict: 'id' })
+    .select('id')
+    .single();
+
+  if (error) {
+    console.error('[StudyFlow API] saveStudySession error:', error);
+    throw new Error(`Failed to save focus session: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
  * Creates minimal Realtime subscription for tasks and habits.
  */
 export function subscribeToRealtimeChanges(userId, { onTasksChange, onHabitsChange, onStatusChange }) {
@@ -447,5 +494,6 @@ export default {
   getTodayHabits,
   toggleHabit,
   getSettings,
+  saveStudySession,
   subscribeToRealtimeChanges
 };
