@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "StudyFlow",
+  "version": "2.1.0",
+  "description": "Chrome extension companion for StudyFlow. Access today's tasks, track progress, and launch focus sessions directly from your browser.",
+  "action": {
+    "default_title": "StudyFlow"
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "permissions": [
+    "sidePanel",
+    "storage"
+  ],
+  "icons": {
+    "16": "src/assets/icons/icon-16.png",
+    "48": "src/assets/icons/icon-48.png",
+    "128": "src/assets/icons/icon-128.png"
+  }
+}

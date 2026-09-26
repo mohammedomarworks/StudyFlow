@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudyFlow Side Panel</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <div class="panel-container">
+    <!-- Header -->
+    <header class="panel-header">
+      <div class="brand">
+        <span class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 10 12 5 2 10l10 5 10-5Z" />
+            <path d="M6 12v5c0 1 2 3 6 3s6-2 6-3v-5" />
+          </svg>
+        </span>
+        <span class="brand-text">Study<b>Flow</b></span>
+      </div>
+
+      <div class="header-actions">
+        <button id="themeToggleBtn" class="icon-btn" title="Toggle Theme" aria-label="Toggle Theme">
+          <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5" />
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+          </svg>
+        </button>
+        <button id="authActionBtn" class="icon-btn" title="Sign Out" aria-label="Account Action">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" y1="12" x2="9" y2="12" />
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Global Notice / Offline Banner -->
+    <div id="statusBanner" class="status-banner hidden" role="status" aria-live="polite"></div>
+
+    <!-- MAIN AUTH CONTAINER: SIGNED OUT STATE -->
+    <section id="authSection" class="auth-section hidden">
+      <div class="auth-card">
+        <div class="auth-header">
+          <h2 class="auth-title">Sign in to StudyFlow</h2>
+          <p class="auth-desc">Connect your StudyFlow account to access today's tasks and timer in Chrome.</p>
+        </div>
+
+        <form id="signInForm" class="auth-form" novalidate>
+          <div class="form-group">
+            <label for="authEmail" class="form-label">Email</label>
+            <input type="email" id="authEmail" class="form-input" placeholder="student@example.com" autocomplete="email" required />
+          </div>
+
+          <div class="form-group">
+            <label for="authPassword" class="form-label">Password</label>
+            <input type="password" id="authPassword" class="form-input" placeholder="••••••••" autocomplete="current-password" required />
+          </div>
+
+          <div id="authErrorMsg" class="form-error hidden" role="alert"></div>
+
+          <button type="submit" id="signInSubmitBtn" class="btn btn-primary btn-block">
+            <span class="btn-text">Sign In</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </form>
+
+        <div class="auth-footer">
+          <p class="text-muted">Need an account? <a href="https://studyflow-productivity.netlify.app/pages/auth.html" target="_blank" rel="noopener noreferrer">Sign up on web ↗</a></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- MAIN APP CONTAINER: SIGNED IN STATE -->
+    <main id="appSection" class="app-section">
+      <!-- Greeting & Status -->
+      <section class="user-greeting-card">
+        <div class="greeting-row">
+          <div class="greeting-info">
+            <h1 id="userGreeting" class="user-greeting">Good afternoon 👋</h1>
+            <p id="userEmail" class="user-email text-muted">student@studyflow.app</p>
+          </div>
+          <div id="cloudStatusBadge" class="cloud-status-badge">
+            <span class="status-dot"></span>
+            <span id="cloudStatusText" class="status-text">Cloud ● Connected</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Today's Progress Card -->
+      <section class="card progress-card">
+        <div class="card-header-compact">
+          <span class="card-title">Today's Progress</span>
+          <span id="progressRatio" class="progress-ratio">0 / 0 tasks complete</span>
+        </div>
+        <div class="progress-bar-track">
+          <div id="progressBarFill" class="progress-bar-fill" style="width: 0%"></div>
+        </div>
+      </section>
+
+      <!-- Today's Tasks Section -->
+      <section class="card tasks-card">
+        <div class="card-header-compact">
+          <span class="card-title">Today's Tasks</span>
+          <button id="toggleQuickAddBtn" class="btn btn-ghost btn-sm" aria-expanded="false" aria-controls="quickAddForm">
+            + Add Task
+          </button>
+        </div>
+
+        <!-- Quick Task Creation Form (Inline Collapsible) -->
+        <form id="quickAddForm" class="quick-add-card hidden" novalidate>
+          <div class="form-group mb-2">
+            <input type="text" id="newTaskTitle" class="form-input form-input-sm" placeholder="Task title..." required />
+          </div>
+
+          <div class="form-row mb-2">
+            <div class="form-col">
+              <select id="newTaskSubject" class="form-select form-select-sm" aria-label="Subject">
+                <option value="">No Subject</option>
+              </select>
+            </div>
+            <div class="form-col">
+              <select id="newTaskPriority" class="form-select form-select-sm" aria-label="Priority">
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="low">Low</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row mb-2">
+            <div class="form-col">
+              <input type="date" id="newTaskDueDate" class="form-input form-input-sm" aria-label="Due Date" />
+            </div>
+          </div>
+
+          <div id="quickAddError" class="form-error hidden" role="alert"></div>
+
+          <div class="quick-add-actions">
+            <button type="button" id="cancelQuickAddBtn" class="btn btn-ghost btn-sm">Cancel</button>
+            <button type="submit" id="saveQuickAddBtn" class="btn btn-primary btn-sm">Save Task</button>
+          </div>
+        </form>
+
+        <!-- Tasks List Container -->
+        <div id="tasksList" class="tasks-list" role="list">
+          <div class="tasks-loading">Loading today's tasks...</div>
+        </div>
+      </section>
+
+      <!-- Today's Habits Section -->
+      <section class="card habits-card">
+        <div class="card-header-compact">
+          <span class="card-title">Today's Habits</span>
+          <span id="habitsRatio" class="progress-ratio">0 / 0 done</span>
+        </div>
+        <div id="habitsList" class="habits-list" role="list">
+          <div class="habits-loading">Loading habits...</div>
+        </div>
+      </section>
+
+      <!-- Focus Launcher Card -->
+      <section class="card focus-card">
+        <div class="focus-inner">
+          <div class="focus-meta">
+            <span class="focus-title">Focus</span>
+            <span class="focus-timer-display">25:00</span>
+          </div>
+          <a href="https://studyflow-productivity.netlify.app/pages/timer.html" id="startFocusBtn" class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
+            Start Focus
+          </a>
+        </div>
+      </section>
+
+      <!-- Open StudyFlow Launcher Button -->
+      <section class="open-web-section">
+        <a href="https://studyflow-productivity.netlify.app/" id="openStudyFlowBtn" class="btn btn-outline btn-block" target="_blank" rel="noopener noreferrer">
+          Open StudyFlow ↗
+        </a>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "name": "studyflow-extension",
+  "version": "2.1.0",
+  "description": "Chrome Extension companion for StudyFlow",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "node tests/extension.test.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1"
+  },
+  "devDependencies": {
+    "vite": "^6.2.0"
+  }
+}

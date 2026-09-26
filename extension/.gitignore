@@ -1,0 +1,8 @@
+# Dependencies
+node_modules/
+
+# Build output (regenerate with `npm run build`)
+dist/
+
+# OS / editor
+.DS_Store
