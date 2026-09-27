@@ -24,7 +24,7 @@ The extension talks directly to the same Supabase backend as the web app
   - Quick add task (title, subject, priority, due date).
   - Delete task.
   - Today's habits with completion toggling.
-  - **Start Focus** → opens the web timer.
+  - **In-panel Focus timer** → run a real Pomodoro focus session inside the Side Panel (see below).
   - **Open StudyFlow** → opens the web app.
   - Sign out.
 - **Realtime refresh**: subscribes to `tasks`, `habits`, and `habit_completions`
@@ -54,13 +54,14 @@ extension/
 │   │   ├── config.js           # Public Supabase URL + publishable key, app URLs
 │   │   ├── supabase.js         # Bundled Supabase client + config validation guard
 │   │   ├── auth.js             # signIn/signOut/getSession/getUser/onAuthStateChange
-│   │   └── api.js              # Tasks/habits/subjects/settings queries + realtime
+│   │   ├── api.js              # Tasks/habits/subjects/settings/study_sessions + realtime
+│   │   └── focus-timer.js      # Pure, testable focus-timer state machine (no side effects)
 │   └── sidepanel/
 │       ├── sidepanel.html      # Panel markup (no inline scripts — CSP safe)
 │       ├── sidepanel.css       # StudyFlow design system
 │       └── sidepanel.js        # Panel controller (state, rendering, events)
 └── tests/
-    └── extension.test.js       # Node-based test suite (20 checks)
+    └── extension.test.js       # Node-based test suite (35 checks)
 ```
 
 The Supabase JS SDK is **bundled locally** by Vite — no executable JavaScript is
@@ -92,7 +93,42 @@ the extension card in `chrome://extensions`.
 
 ---
 
-## Supabase configuration
+## Focus timer (in-panel)
+
+The Focus card runs a real Pomodoro timer **inside the Side Panel** — it no
+longer just opens the web timer in a new tab (the web timer at
+`pages/timer.html` is unchanged and still works).
+
+- **States:** READY (`25:00`, `▶ Start Focus`) → FOCUS (`⏸ Pause` / `⏹ Reset`)
+  → PAUSED (`▶ Resume` / `⏹ Reset`) → completion ("Focus session complete",
+  `Start Break`).
+- **Timestamp-based countdown:** remaining time is always derived from an
+  absolute `endTime` (`endTime - Date.now()`), never by decrementing a counter,
+  so it stays accurate across Side Panel suspension. Pure state logic lives in
+  [`src/shared/focus-timer.js`](src/shared/focus-timer.js) and is fully unit-tested.
+- **Panel lifecycle:** minimal, non-sensitive timer state is stored in
+  `chrome.storage.local` (key `studyflow_focus_timer`). On reopen the running
+  session is restored and remaining time recomputed from timestamps. If it
+  expired while the panel was closed, completion is processed **exactly once**.
+- **Durations:** defaults Focus 25 / Short break 5 / Long break 15, editable in
+  the card's "Timer settings" and stored extension-locally
+  (`studyflow_focus_settings`). Compatible cloud Pomodoro settings are read as a
+  seed where available; the extension **never overwrites** the web app's settings.
+- **Cloud persistence:** a completed **focus** session is written to the shared
+  Supabase `study_sessions` table via an idempotent upsert keyed on a
+  client-generated UUID (`onConflict: 'id'`), matching the web app's
+  `Store.saveSession` semantics — so reopen/reload/realtime can never create a
+  duplicate row. Breaks are local only and never written.
+- **Auth safety:** the timer state is tagged with its owning `userId`. Signing
+  out cancels the timer and clears stored state; a state belonging to a
+  different user is discarded on load — no session is ever written under the
+  wrong account and no state leaks between users.
+- **Offline:** the timer may run locally while offline. On an offline
+  completion the panel shows *"Focus complete — session will need to be saved
+  when you're online."* — it does **not** claim a cloud save succeeded, and
+  there is no background sync queue (the web app owns durable offline writes).
+
+---
 
 Configuration lives in [`src/shared/config.js`](src/shared/config.js) and contains
 **only public values**:
@@ -158,5 +194,8 @@ npm test        # or: node tests/extension.test.js
 
 The suite validates the manifest (V3, version 2.1.0, side panel, service worker),
 required source files, minimal permissions, correct production URLs, required
-API/auth functions, CSP compliance, icon integrity, a valid `dist/` build, and
-that no secret credentials are present.
+API/auth functions, CSP compliance, icon integrity, a valid `dist/` build, that
+no secret credentials are present, and the full Focus-timer state machine
+(default state, start/pause/resume/reset, timestamp math, persistence &
+restore-after-reopen, completion-exactly-once, session payload shape,
+signed-out & account-switch safety, break isolation, and no per-second counter).

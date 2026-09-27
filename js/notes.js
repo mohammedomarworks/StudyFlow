@@ -20,6 +20,24 @@ const view = {
   activeDetailId: null
 };
 
+/* --------------------------------------------------------------------------
+   Deep-link diagnostics (TEMPORARY, behind a removable flag).
+   Enable with `?debugDeeplink=1` in the URL or
+   `localStorage.setItem('sf_debug_deeplink','1')`. Off by default, so it
+   emits nothing in normal use. Remove this block (and the dlog calls) once the
+   context-menu → note deep-link flow is confirmed working in Chrome.
+   -------------------------------------------------------------------------- */
+const DEBUG_DEEPLINK = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('debugDeeplink') === '1') return true;
+    return typeof localStorage !== 'undefined' && localStorage.getItem('sf_debug_deeplink') === '1';
+  } catch { return false; }
+})();
+function dlog(...args) {
+  if (DEBUG_DEEPLINK) console.log('[StudyFlow deep-link]', ...args);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   readUrlParams();
   populateSubjectDropdowns();
@@ -62,13 +80,100 @@ function handleUrlDeepLinks() {
   // 2. Check direct note deep-link (?noteId=...)
   if (params.has('noteId')) {
     const noteId = params.get('noteId');
-    const note = Store.getNote(noteId);
-    if (note) {
+    dlog('deep-link start; noteId =', noteId);
+
+    // The synchronous snapshot is often empty here: on a fresh page load the
+    // Supabase session restore (Auth.init) and the cloud-mode selection it
+    // drives complete asynchronously, *after* this DOMContentLoaded handler.
+    // So do not decide "not found" from the initial in-memory snapshot —
+    // resolve against a fully initialized repository first.
+    const immediate = Store.getNote(noteId);
+    dlog('Store.getNote before readiness =', immediate ? 'HIT' : 'miss');
+    if (immediate) {
       openNoteDetailModal(noteId);
-    } else {
-      App.toast('Note not found or may have been deleted', 'error');
+      return;
     }
+
+    resolveNoteFromCloud(noteId).then(cloudNote => {
+      dlog('Store.getNote after readiness =', cloudNote ? 'HIT' : 'miss');
+      if (cloudNote) {
+        render();
+        openNoteDetailModal(noteId);
+      } else {
+        App.toast('Note not found or may have been deleted', 'error');
+      }
+    });
   }
+}
+
+/**
+ * Resolves a note deep link once the repository is actually ready.
+ *
+ * ROOT CAUSE this addresses: notes.js runs its deep-link handler on
+ * DOMContentLoaded, but nothing has put the RepositoryFactory into cloud mode
+ * yet — that happens later, when app.js's `Auth.init().then(renderAuthNav)`
+ * resolves and calls `setMode('cloud', userId)`. A note created by the browser
+ * extension lives only in Supabase, so until cloud mode is selected AND its
+ * per-user cache is hydrated, `Store.getNote` reads an empty/local snapshot and
+ * returns null. The old guard `if (rf.getMode() !== 'cloud') return null;`
+ * therefore bailed out every time and produced a false "Note not found".
+ *
+ * The fix waits for the same lifecycle the app uses (Auth session restore, then
+ * repository mode selection + hydration) before looking the note up. It reuses
+ * existing methods only — no new cache, no repository rewrite, no setTimeout.
+ * Returns the note or null.
+ */
+async function resolveNoteFromCloud(noteId) {
+  if (!noteId) return null;
+  try {
+    const rf = await ensureRepositoryReady();
+    dlog('after readiness: rf =', !!rf, 'mode =', rf ? rf.getMode() : 'n/a',
+      'user =', (window.Auth && window.Auth.getUser && window.Auth.getUser()) ? window.Auth.getUser().id : 'none');
+
+    if (rf && rf.getMode() === 'cloud') {
+      const repo = rf.getActive();
+      dlog('active repo =', repo && repo.constructor ? repo.constructor.name : typeof repo,
+        '; hydrateCache =', !!(repo && typeof repo.hydrateCache === 'function'));
+      if (repo && typeof repo.hydrateCache === 'function') {
+        dlog('hydrateCache: start');
+        await repo.hydrateCache();
+        dlog('hydrateCache: complete');
+      }
+    }
+    return Store.getNote(noteId);
+  } catch (err) {
+    // Surface the real reason instead of hiding it behind "not found".
+    console.error('[StudyFlow] deep-link cloud resolve failed:', err);
+    dlog('hydrateCache/lookup error:', err && err.message);
+    return null;
+  }
+}
+
+/**
+ * Awaits the auth + repository lifecycle so the deep-link lookup does not race
+ * initialization. Both calls are idempotent:
+ *  - Auth.init() caches its promise and restores the Supabase session.
+ *  - RepositoryFactory.init() inspects the (now-restored) auth user + migration
+ *    state and selects cloud/local mode exactly as the app's nav does.
+ * Returns the RepositoryFactory (or null if unavailable).
+ */
+async function ensureRepositoryReady() {
+  if (typeof window !== 'undefined' && window.Auth && typeof window.Auth.init === 'function') {
+    dlog('awaiting Auth.init()');
+    try { await window.Auth.init(); } catch (e) { dlog('Auth.init error:', e && e.message); }
+    dlog('Auth.init resolved; user =', (window.Auth.getUser && window.Auth.getUser()) ? window.Auth.getUser().id : 'none');
+  }
+  const repoModule = (typeof window !== 'undefined' && window.StudyFlowRepository)
+    ? window.StudyFlowRepository
+    : null;
+  const rf = repoModule && repoModule.RepositoryFactory;
+  dlog('RepositoryFactory present =', !!rf);
+  if (rf && typeof rf.init === 'function') {
+    dlog('awaiting RepositoryFactory.init()');
+    try { await rf.init(); } catch (e) { dlog('RepositoryFactory.init error:', e && e.message); }
+    dlog('RepositoryFactory.init resolved; mode =', rf.getMode());
+  }
+  return rf;
 }
 
 /* ==========================================================================
