@@ -477,6 +477,188 @@ await runTest('35. focus-timer exposes no tick/decrement counter API (no runaway
   assert.deepStrictEqual(norm, { focus: 25, shortBreak: 5, longBreak: 15 });
 });
 
+// ==========================================================================
+// Context Menu integration tests (36–50) — static/manifest checks + the pure
+// payload/URL helpers in src/shared/context-menu.js. No live browser behavior
+// is claimed; onClicked wiring is asserted by source inspection only.
+// ==========================================================================
+
+const cm = await import('../src/shared/context-menu.js');
+const swSource = fs.readFileSync(path.join(extensionRoot, 'src/background/service-worker.js'), 'utf8');
+
+// 36. contextMenus permission present (and still minimal otherwise)
+await runTest('36. manifest declares the contextMenus permission (and stays minimal)', () => {
+  const manifest = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'manifest.json'), 'utf8'));
+  const perms = manifest.permissions || [];
+  assert(perms.includes('contextMenus'), 'contextMenus permission required');
+  assert(perms.includes('sidePanel') && perms.includes('storage'), 'existing minimal permissions preserved');
+  for (const forbidden of ['tabs', 'history', 'bookmarks', 'scripting', 'activeTab', 'cookies']) {
+    assert(!perms.includes(forbidden), `must not add '${forbidden}' permission`);
+  }
+  assert(!manifest.host_permissions || !manifest.host_permissions.includes('<all_urls>'), 'no <all_urls>');
+});
+
+// 37. Parent StudyFlow menu is created
+await runTest('37. service worker creates the parent StudyFlow menu', () => {
+  assert(swSource.includes('registerContextMenus'), 'menu registration function present');
+  assert(swSource.includes(`id: cm.MENU_IDS.PARENT`), 'parent menu created');
+  assert(swSource.includes("title: 'StudyFlow'"), "parent titled 'StudyFlow'");
+  assert.strictEqual(cm.MENU_IDS.PARENT, 'studyflow_root');
+});
+
+// 38. Save page as Note child exists
+await runTest('38. "Save page as Note" child menu is created under the parent', () => {
+  assert(swSource.includes('SAVE_PAGE'), 'save-page id used');
+  assert(swSource.includes("title: 'Save page as Note'"), 'save-page title present');
+  assert(swSource.includes('parentId: cm.MENU_IDS.PARENT'), 'child attached to parent');
+});
+
+// 39. Save selected text as Note child exists
+await runTest('39. "Save selected text as Note" child menu is created under the parent', () => {
+  assert(swSource.includes('SAVE_SELECTION'), 'save-selection id used');
+  assert(swSource.includes("title: 'Save selected text as Note'"), 'save-selection title present');
+});
+
+// 40. page context configured
+await runTest('40. Save page item uses the page context', () => {
+  const idx = swSource.indexOf('SAVE_PAGE');
+  const chunk = swSource.slice(idx, idx + 220);
+  assert(/contexts:\s*\['page'\]/.test(chunk), "save-page must use contexts: ['page']");
+});
+
+// 41. selection context configured
+await runTest('41. Save selection item uses the selection context', () => {
+  const idx = swSource.indexOf('SAVE_SELECTION');
+  const chunk = swSource.slice(idx, idx + 240);
+  assert(/contexts:\s*\['selection'\]/.test(chunk), "save-selection must use contexts: ['selection']");
+});
+
+// 42. onClicked handler registered (not an inline onclick)
+await runTest('42. service worker registers contextMenus.onClicked (no inline onclick)', () => {
+  assert(swSource.includes('chrome.contextMenus.onClicked.addListener'), 'onClicked listener registered');
+  assert(!/create\([^)]*onclick/i.test(swSource), 'must not pass onclick into menu creation');
+});
+
+// 43. page-title/url payload mapping
+await runTest('43. buildPageNotePayload maps title + url safely', () => {
+  const p = cm.buildPageNotePayload({ title: 'Intro to OS', url: 'https://example.com/a' });
+  assert.strictEqual(p.title, 'Intro to OS');
+  assert.strictEqual(p.content, 'Source: https://example.com/a');
+  // Falls back to hostname when the title is missing.
+  const p2 = cm.buildPageNotePayload({ title: '', url: 'https://example.com/a' });
+  assert.strictEqual(p2.title, 'example.com');
+});
+
+// 44. selected-text payload mapping
+await runTest('44. buildSelectionNotePayload includes selected text + source metadata', () => {
+  const p = cm.buildSelectionNotePayload({ selectionText: 'hello world', title: 'Page', url: 'https://example.com/x' });
+  assert(p.content.startsWith('hello world'), 'selected text leads the content');
+  assert(p.content.includes('Source:'), 'source block present');
+  assert(p.content.includes('https://example.com/x'), 'url present');
+  assert(p.content.includes('Page'), 'title present');
+});
+
+// 45. payloads never contain HTML / are plain text
+await runTest('45. note payloads are plain text and do not inject HTML or javascript:', () => {
+  const evil = '<img src=x onerror=alert(1)> javascript:alert(1)';
+  const p = cm.buildSelectionNotePayload({ selectionText: evil, title: '<b>t</b>', url: 'https://example.com' });
+  // The content is a plain string; it is not parsed as HTML anywhere. It is
+  // stored verbatim as text (the web app renders notes with textContent).
+  assert.strictEqual(typeof p.content, 'string');
+  assert.strictEqual(typeof p.title, 'string');
+  // The raw text is preserved verbatim (not sanitized into markup); it is the
+  // renderer's job to use textContent. Our helper must not build any HTML.
+  assert(p.content.includes(evil), 'untrusted text stored verbatim as plain text');
+  const cmSource = fs.readFileSync(path.join(extensionRoot, 'src/shared/context-menu.js'), 'utf8');
+  assert(!/innerHTML|insertAdjacentHTML|document\.write/.test(cmSource), 'no HTML sink used in helper');
+});
+
+// 46. internal StudyFlow URL validation is safe
+await runTest('46. isSafeStudyFlowUrl only accepts the https StudyFlow origin', () => {
+  assert.strictEqual(cm.isSafeStudyFlowUrl('https://studyflow-productivity.netlify.app/pages/notes.html'), true);
+  assert.strictEqual(cm.isSafeStudyFlowUrl('https://evil.example.com/pages/notes.html'), false);
+  assert.strictEqual(cm.isSafeStudyFlowUrl('javascript:alert(1)'), false);
+  assert.strictEqual(cm.isSafeStudyFlowUrl('http://studyflow-productivity.netlify.app/'), false);
+  assert.strictEqual(cm.isSafeStudyFlowUrl('not a url'), false);
+});
+
+// 47. deep link builder is origin-safe and encodes the id
+await runTest('47. buildNoteDeepLink produces a validated, encoded StudyFlow URL', () => {
+  const link = cm.buildNoteDeepLink('abc 123&x');
+  assert(link.startsWith('https://studyflow-productivity.netlify.app/pages/notes.html?noteId='));
+  assert(link.includes(encodeURIComponent('abc 123&x')));
+  assert.strictEqual(cm.isSafeStudyFlowUrl(link), true);
+  assert.strictEqual(cm.buildNoteDeepLink(''), null);
+});
+
+// 48. signed-out behavior routes to authentication
+await runTest('48. signed-out path routes to the StudyFlow auth page (no cloud write)', () => {
+  assert.strictEqual(cm.authPageUrl(), 'https://studyflow-productivity.netlify.app/pages/auth.html');
+  // Source: when there is no user, the handler opens the auth URL and returns
+  // before calling createNote.
+  assert(swSource.includes('cm.authPageUrl()'), 'handler opens auth page');
+  const authIdx = swSource.indexOf('cm.authPageUrl()');
+  const createIdx = swSource.indexOf('api.createNote');
+  assert(authIdx < createIdx, 'auth routing occurs before any createNote call');
+});
+
+// 49. note creation delegates through the shared API (not reimplemented in SW)
+await runTest('49. normal note creation delegates to shared api.createNote', () => {
+  const apiModule = fs.readFileSync(path.join(extensionRoot, 'src/shared/api.js'), 'utf8');
+  assert(swSource.includes('api.createNote(payload)'), 'SW calls shared api.createNote');
+  assert(apiModule.includes('export async function createNote'), 'createNote lives in shared api');
+  assert(apiModule.includes("from('notes')"), 'createNote writes the notes table');
+  assert(apiModule.includes('user_id: user.id'), 'user_id derived from session, not input');
+});
+
+// 50. duplicate click handling does not create duplicate invocation
+await runTest('50. duplicate context-menu clicks are de-bounced to one invocation', () => {
+  assert(swSource.includes('isDuplicateClick'), 'duplicate guard present');
+  assert(swSource.includes('DUPLICATE_WINDOW_MS'), 'debounce window defined');
+  // createNote also supports idempotent upsert via a client id.
+  const apiModule = fs.readFileSync(path.join(extensionRoot, 'src/shared/api.js'), 'utf8');
+  assert(apiModule.includes("onConflict: 'id'"), 'createNote supports idempotent upsert');
+});
+
+// 51. no secret material introduced by the new modules
+await runTest('51. context-menu + service worker introduce no secrets/tokens/eval', () => {
+  for (const rel of ['src/shared/context-menu.js', 'src/background/service-worker.js']) {
+    const src = fs.readFileSync(path.join(extensionRoot, rel), 'utf8');
+    assert(!src.includes('service' + '_role'), `no service_role in ${rel}`);
+    assert(!/sb_secret_[A-Za-z0-9]{8,}/.test(src), `no secret key in ${rel}`);
+    assert(!src.includes('password:'), `no password literal in ${rel}`);
+    assert(!/\baccess_token\b|\brefresh_token\b/.test(src), `no token storage in ${rel}`);
+    assert(!/\beval\(/.test(src), `no eval in ${rel}`);
+    assert(!/new Function\(/.test(src), `no new Function in ${rel}`);
+  }
+});
+
+// 52. createNote returns the real inserted DB id (deep-link correctness)
+await runTest('52. api.createNote selects and returns the real database note id', () => {
+  const apiModule = fs.readFileSync(path.join(extensionRoot, 'src/shared/api.js'), 'utf8');
+  const start = apiModule.indexOf('export async function createNote');
+  const body = apiModule.slice(start, apiModule.indexOf('\n}\n', start));
+  assert(/\.select\(\s*['"]id[^'"]*['"]\s*\)/.test(body), 'createNote selects id from the inserted row');
+  assert(body.includes('.single()'), 'returns a single row (the created note)');
+  assert(body.includes('return data'), 'returns the row (with its DB id) to the caller');
+  // The id must come from the database, never fabricated when none is supplied.
+  assert(!/id:\s*(Date\.now|Math\.random|crypto\.randomUUID)/.test(body),
+    'createNote must not invent a client id the web app cannot find');
+});
+
+// 53. createNote derives ownership from the session, and its id round-trips to
+//     the exact deep link the service worker opens.
+await runTest('53. created note id round-trips into the StudyFlow deep link', () => {
+  const apiModule = fs.readFileSync(path.join(extensionRoot, 'src/shared/api.js'), 'utf8');
+  assert(apiModule.includes('const user = await requireUser()'), 'ownership from authenticated session');
+  assert(apiModule.includes('user_id: user.id'), 'user_id from session, never from input');
+  // The SW opens buildNoteDeepLink(created.id); that id is the DB id from #52.
+  assert(swSource.includes('created && created.id') || swSource.includes('created.id'),
+    'service worker uses the returned DB id for the deep link');
+  const link = cm.buildNoteDeepLink('55555555-5555-4555-8555-555555555555');
+  assert(link.includes('noteId=55555555-5555-4555-8555-555555555555'), 'deep link carries the real id verbatim');
+});
+
 console.log('\n========================================');
 console.log(`Extension Test Results: ${passedCount} passed, ${failedCount} failed`);
 console.log('========================================\n');
