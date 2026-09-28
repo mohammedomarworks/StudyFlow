@@ -235,9 +235,123 @@ await runTest('11. notes.js waits on Auth.init + RepositoryFactory.init (no setT
   assert(/window\.Auth\.init\(\)/.test(notesSrc), 'awaits Auth session restore');
   assert(/rf\.init\(\)/.test(notesSrc), 'awaits repository mode selection');
   assert(!/setTimeout\s*\(|setInterval\s*\(/.test(notesSrc), 'no polling/sleep shortcut');
-  const readyIdx = notesSrc.indexOf('ensureRepositoryReady');
-  const guardIdx = notesSrc.indexOf("getMode() === 'cloud'");
+  const readyIdx = notesSrc.indexOf('await ensureRepositoryReady()');
+  const guardIdx = notesSrc.indexOf("mode === 'cloud'");
   assert(readyIdx > -1 && guardIdx > -1 && readyIdx < guardIdx, 'readiness is awaited before the cloud-mode check');
+});
+
+// ---------------------------------------------------------------------------
+// Local-mode cloud-fetch model — the REAL failing state, proven from the code:
+// the extension writes the note straight to Supabase, but the web app only
+// enters cloud mode when migration.isCompleted(uid) is true (repository.js
+// RepositoryFactory.init + app.js renderAuthNav). A signed-in user whose
+// migration is NOT completed in *this* browser stays in LOCAL mode, so
+// hydrateCache/Store (cloud-routed) never applies and the previous fix — which
+// only acted in cloud mode — still produced a false "Note not found". The new
+// fix resolves that one row directly via the RLS-scoped CloudRepository
+// .getNote(id), regardless of mode, without switching the app's global mode.
+// ---------------------------------------------------------------------------
+function makeLocalModeRuntime({ userId, migrated, cloudNotes, authed = true }) {
+  const localNotes = []; // base sp_notes: a cloud-created note is NOT here
+  const cloudRepo = {
+    // RLS model: only a row owned by the authenticated user is ever returned.
+    async getNote(id) {
+      if (!authed || !userId) return null; // anonymous read denied by RLS
+      return cloudNotes.find(n => n.id === id && n.user_id === userId) || null;
+    },
+    async hydrateCache() { return { notes: cloudNotes.slice() }; }
+  };
+  const factory = {
+    _mode: 'local', _uid: null,
+    getMode() { return this._mode; },
+    getActiveUserId() { return this._uid; },
+    setMode(m, u = null) { this._mode = m; this._uid = u; },
+    getActive() { return cloudRepo; },
+    getRepository(type) {
+      return type === 'cloud'
+        ? cloudRepo
+        : { getNote: async (id) => localNotes.find(n => n.id === id) || null };
+    },
+    async init() {
+      const u = authed ? { id: userId } : null;
+      // Cloud only when signed in AND migrated — mirrors the real gate.
+      if (u && u.id && migrated) this.setMode('cloud', u.id);
+      else this.setMode('local');
+      return this.getActive();
+    }
+  };
+  const Auth = {
+    getUser() { return authed ? { id: userId } : null; },
+    async init() { return { user: this.getUser() }; }
+  };
+  const Store = { getNote(id) { return localNotes.find(n => n.id === id) || null; } };
+  return { factory, Auth, Store, cloudRepo };
+}
+
+// Faithful model of the fixed resolveNoteFromCloud (paths A → B → C).
+async function resolveWithCloudFallback(noteId, rt) {
+  await rt.Auth.init();
+  await rt.factory.init();
+  const mode = rt.factory.getMode();
+  const user = rt.Auth.getUser();
+  if (mode === 'cloud') {                              // (A) hydrate + cloud Store
+    await rt.factory.getActive().hydrateCache();
+    const hit = rt.Store.getNote(noteId);
+    if (hit) return hit;
+  }
+  if (user && user.id) {                               // (B) RLS-scoped single row
+    const row = await rt.factory.getRepository('cloud').getNote(noteId);
+    if (row) return row;
+  }
+  return rt.Store.getNote(noteId);                     // (C) local fallback
+}
+
+// 12. THE repeat-failure state: signed in but NOT migrated → local mode. The
+//     direct RLS-scoped cloud fetch still resolves the extension's note, and
+//     the app's global mode is left as local (an unmigrated planner untouched).
+await runTest('12. authenticated + not-migrated (local mode): deep link still resolves the cloud note', async () => {
+  const id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const rt = makeLocalModeRuntime({ userId: 'user-1', migrated: false, cloudNotes: [{ id, user_id: 'user-1', title: 'Saved page' }] });
+  const note = await resolveWithCloudFallback(id, rt);
+  assert(note && note.id === id, 'note resolves via direct cloud getNote despite local mode');
+  assert.strictEqual(rt.factory.getMode(), 'local', 'global app mode is NOT force-switched to cloud');
+});
+
+// 13. Not signed in on the web (only the extension was) → RLS denies the read →
+//     honest "not found" (no fabricated note, no weakened security).
+await runTest('13. unauthenticated web session cannot read the cloud note (RLS) → not found', async () => {
+  const id = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const rt = makeLocalModeRuntime({ userId: 'user-1', migrated: false, authed: false, cloudNotes: [{ id, user_id: 'user-1', title: 'Saved page' }] });
+  const note = await resolveWithCloudFallback(id, rt);
+  assert.strictEqual(note, null, 'no note without an authenticated owner');
+});
+
+// 14. Migrated user still works through the cloud path and ends in cloud mode.
+await runTest('14. authenticated + migrated resolves and ends in cloud mode', async () => {
+  const id = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const rt = makeLocalModeRuntime({ userId: 'user-9', migrated: true, cloudNotes: [{ id, user_id: 'user-9', title: 'Mine' }] });
+  const note = await resolveWithCloudFallback(id, rt);
+  assert(note && note.id === id, 'note resolves');
+  assert.strictEqual(rt.factory.getMode(), 'cloud', 'migrated user is in cloud mode');
+});
+
+// 15. A note the authenticated user does not own / does not exist → not found.
+await runTest('15. a truly missing/foreign note still reports not found', async () => {
+  const rt = makeLocalModeRuntime({ userId: 'user-1', migrated: false, cloudNotes: [{ id: 'x', user_id: 'someone-else', title: 'Not yours' }] });
+  const note = await resolveWithCloudFallback('does-not-exist', rt);
+  assert.strictEqual(note, null);
+});
+
+// 16. Source guard: notes.js wires the direct RLS-scoped cloud fetch for the
+//     authenticated-but-not-cloud case, feeds the row to the modal, and uses no
+//     setTimeout/sleep.
+await runTest('16. notes.js resolves an authed local-mode deep link via getRepository("cloud").getNote', () => {
+  assert(notesSrc.includes("getRepository('cloud')"), 'obtains the cloud repository');
+  assert(/cloud\.getNote\s*\(/.test(notesSrc), 'calls the RLS-scoped cloud getNote');
+  assert(/user\s*&&\s*user\.id/.test(notesSrc), 'direct fetch guarded by an authenticated user');
+  assert(/function openNoteDetailModal\(id,\s*fallbackNote\)/.test(notesSrc), 'modal accepts the fetched row as a fallback');
+  assert(notesSrc.includes('migrationCompleted'), 'diagnostics log the migration gate that drives mode');
+  assert(!/setTimeout\s*\(|setInterval\s*\(/.test(notesSrc), 'no polling/sleep shortcut');
 });
 
 console.log('\n========================================');

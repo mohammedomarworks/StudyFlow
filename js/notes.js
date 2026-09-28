@@ -38,6 +38,34 @@ function dlog(...args) {
   if (DEBUG_DEEPLINK) console.log('[StudyFlow deep-link]', ...args);
 }
 
+/**
+ * Diagnostic helper: is the local→cloud migration marked complete for this user
+ * in THIS browser profile? Cloud mode is gated on this flag in both
+ * repository.js (RepositoryFactory.init) and app.js (renderAuthNav), and the
+ * flag lives in this browser's localStorage — so a user can be signed in yet
+ * still run in local mode here. Returns true/false (or null if it can't tell).
+ */
+function migrationCompleted(user) {
+  try {
+    const m = (typeof window !== 'undefined') ? window.StudyFlowMigration : null;
+    if (!user || !user.id || !m || typeof m.isCompleted !== 'function') return false;
+    return !!m.isCompleted(user.id);
+  } catch { return null; }
+}
+
+/** Mirrors storage.js _getActiveKey('sp_notes') so diagnostics show the exact
+ *  localStorage key Store.getNote reads from under the current mode. */
+function activeNotesKey() {
+  try {
+    const rf = (typeof window !== 'undefined' && window.StudyFlowRepository)
+      ? window.StudyFlowRepository.RepositoryFactory : null;
+    if (rf && rf.getMode && rf.getMode() === 'cloud' && rf.getActiveUserId && rf.getActiveUserId()) {
+      return 'sp_cloud_sp_notes_' + rf.getActiveUserId();
+    }
+  } catch { /* fall through to base key */ }
+  return 'sp_notes';
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   readUrlParams();
   populateSubjectDropdowns();
@@ -80,7 +108,9 @@ function handleUrlDeepLinks() {
   // 2. Check direct note deep-link (?noteId=...)
   if (params.has('noteId')) {
     const noteId = params.get('noteId');
-    dlog('deep-link start; noteId =', noteId);
+    dlog('deep-link start; noteId =', noteId, '; url =', (typeof window !== 'undefined') ? window.location.href : '');
+    dlog('window.Auth present =', !!(typeof window !== 'undefined' && window.Auth),
+      '; this noteId must equal the extension createNote id logged in the service-worker console');
 
     // The synchronous snapshot is often empty here: on a fresh page load the
     // Supabase session restore (Auth.init) and the cloud-mode selection it
@@ -88,17 +118,19 @@ function handleUrlDeepLinks() {
     // So do not decide "not found" from the initial in-memory snapshot —
     // resolve against a fully initialized repository first.
     const immediate = Store.getNote(noteId);
-    dlog('Store.getNote before readiness =', immediate ? 'HIT' : 'miss');
+    dlog('Store.getNote before readiness =', immediate ? 'HIT' : 'miss', '; read key =', activeNotesKey());
     if (immediate) {
       openNoteDetailModal(noteId);
       return;
     }
 
-    resolveNoteFromCloud(noteId).then(cloudNote => {
-      dlog('Store.getNote after readiness =', cloudNote ? 'HIT' : 'miss');
-      if (cloudNote) {
+    resolveNoteFromCloud(noteId).then(resolved => {
+      dlog('resolve result =', resolved ? 'HIT' : 'miss');
+      if (resolved) {
         render();
-        openNoteDetailModal(noteId);
+        // Pass the resolved row so the modal can display a cloud-only note even
+        // when it is not present in the (local-mode) Store cache.
+        openNoteDetailModal(noteId, resolved);
       } else {
         App.toast('Note not found or may have been deleted', 'error');
       }
@@ -109,42 +141,74 @@ function handleUrlDeepLinks() {
 /**
  * Resolves a note deep link once the repository is actually ready.
  *
- * ROOT CAUSE this addresses: notes.js runs its deep-link handler on
- * DOMContentLoaded, but nothing has put the RepositoryFactory into cloud mode
- * yet — that happens later, when app.js's `Auth.init().then(renderAuthNav)`
- * resolves and calls `setMode('cloud', userId)`. A note created by the browser
- * extension lives only in Supabase, so until cloud mode is selected AND its
- * per-user cache is hydrated, `Store.getNote` reads an empty/local snapshot and
- * returns null. The old guard `if (rf.getMode() !== 'cloud') return null;`
- * therefore bailed out every time and produced a false "Note not found".
+ * ROOT CAUSE this addresses (two layers):
+ *  1. Timing: notes.js runs its deep-link handler on DOMContentLoaded, before
+ *     Auth.init() has restored the Supabase session and before cloud mode is
+ *     selected. So the initial Store.getNote reads an empty/local snapshot.
+ *  2. Mode gating: cloud mode is only selected when
+ *     `migration.isCompleted(user.id)` is true (repository.js RepositoryFactory
+ *     .init + app.js renderAuthNav). A note created by the browser extension is
+ *     written straight to Supabase regardless of migration, so a signed-in user
+ *     whose migration is not completed in *this* browser stays in local mode and
+ *     could never see the note — the previous fix only acted in cloud mode.
  *
- * The fix waits for the same lifecycle the app uses (Auth session restore, then
- * repository mode selection + hydration) before looking the note up. It reuses
- * existing methods only — no new cache, no repository rewrite, no setTimeout.
- * Returns the note or null.
+ * Strategy (reuses existing methods only — no new cache, no repo rewrite, no
+ * setTimeout, no fake note, no RLS change):
+ *  (A) If cloud mode: await hydrateCache() and read via the cloud-routed Store.
+ *  (B) Else if authenticated: fetch that single row directly through the
+ *      RLS-scoped CloudRepository.getNote(id). RLS enforces ownership on the
+ *      server; a non-owner/anonymous read simply returns null. Global app mode
+ *      is left untouched (an unmigrated user's local planner is not disturbed).
+ *  (C) Else: fall back to the local Store (covers a genuine local-only note).
+ * Returns the note (from cache or cloud) or null.
  */
 async function resolveNoteFromCloud(noteId) {
   if (!noteId) return null;
   try {
     const rf = await ensureRepositoryReady();
-    dlog('after readiness: rf =', !!rf, 'mode =', rf ? rf.getMode() : 'n/a',
-      'user =', (window.Auth && window.Auth.getUser && window.Auth.getUser()) ? window.Auth.getUser().id : 'none');
+    const mode = rf && typeof rf.getMode === 'function' ? rf.getMode() : 'n/a';
+    const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+      ? window.Auth.getUser() : null;
+    dlog('after readiness: rf =', !!rf, '; mode =', mode,
+      '; user =', user ? user.id : 'none',
+      '; migrationCompleted =', migrationCompleted(user));
 
-    if (rf && rf.getMode() === 'cloud') {
+    // (A) Cloud mode — hydrate the per-user cache, then read via the same key.
+    if (rf && mode === 'cloud') {
       const repo = rf.getActive();
       dlog('active repo =', repo && repo.constructor ? repo.constructor.name : typeof repo,
-        '; hydrateCache =', !!(repo && typeof repo.hydrateCache === 'function'));
+        '; hydrateCache =', !!(repo && typeof repo.hydrateCache === 'function'),
+        '; cloud cache key =', user ? ('sp_cloud_sp_notes_' + user.id) : 'sp_cloud_sp_notes_<uid>');
       if (repo && typeof repo.hydrateCache === 'function') {
         dlog('hydrateCache: start');
         await repo.hydrateCache();
         dlog('hydrateCache: complete');
       }
+      const hit = Store.getNote(noteId);
+      dlog('cloud-mode Store.getNote =', hit ? 'HIT' : 'miss', '; read key =', activeNotesKey());
+      if (hit) return hit;
     }
-    return Store.getNote(noteId);
+
+    // (B) Authenticated but NOT in cloud mode — resolve the single cloud row
+    //     directly. RLS scopes it to the authenticated owner.
+    if (rf && user && user.id && typeof rf.getRepository === 'function') {
+      const cloud = rf.getRepository('cloud');
+      if (cloud && typeof cloud.getNote === 'function') {
+        dlog('direct cloud getNote (mode =', mode + '): start');
+        const row = await cloud.getNote(noteId);
+        dlog('direct cloud getNote =', row ? 'HIT' : 'miss');
+        if (row) return row;
+      }
+    }
+
+    // (C) Final fallback: the local store (genuine local note, or not found).
+    const local = Store.getNote(noteId);
+    dlog('final Store.getNote =', local ? 'HIT' : 'miss', '; read key =', activeNotesKey());
+    return local;
   } catch (err) {
     // Surface the real reason instead of hiding it behind "not found".
     console.error('[StudyFlow] deep-link cloud resolve failed:', err);
-    dlog('hydrateCache/lookup error:', err && err.message);
+    dlog('resolve error:', err && err.message);
     return null;
   }
 }
@@ -168,10 +232,12 @@ async function ensureRepositoryReady() {
     : null;
   const rf = repoModule && repoModule.RepositoryFactory;
   dlog('RepositoryFactory present =', !!rf);
+  if (rf && typeof rf.getMode === 'function') dlog('mode before init =', rf.getMode());
   if (rf && typeof rf.init === 'function') {
     dlog('awaiting RepositoryFactory.init()');
     try { await rf.init(); } catch (e) { dlog('RepositoryFactory.init error:', e && e.message); }
-    dlog('RepositoryFactory.init resolved; mode =', rf.getMode());
+    dlog('RepositoryFactory.init resolved; mode after init =', rf.getMode(),
+      '; activeUserId =', typeof rf.getActiveUserId === 'function' ? rf.getActiveUserId() : 'n/a');
   }
   return rf;
 }
@@ -748,8 +814,11 @@ function handleSubmitNote(e) {
 /* ==========================================================================
    Open Note Detail Reading Modal
    ========================================================================== */
-function openNoteDetailModal(id) {
-  const note = Store.getNote(id);
+function openNoteDetailModal(id, fallbackNote) {
+  // fallbackNote lets a deep link display a cloud-only row that isn't in the
+  // (local-mode) Store cache. Store is preferred when present so edits/pins stay
+  // in sync; the fallback is the real fetched row, never a fabricated note.
+  const note = Store.getNote(id) || fallbackNote || null;
   if (!note) {
     App.toast('Note not found', 'error');
     return;
