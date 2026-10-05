@@ -17,54 +17,9 @@ const view = {
   subject: '',
   filter: 'all', // 'all' | 'pinned'
   sort: 'updated',
-  activeDetailId: null
+  activeDetailId: null,
+  activeDetailNote: null   // retains the currently-open note (incl. cloud-only rows)
 };
-
-/* --------------------------------------------------------------------------
-   Deep-link diagnostics (TEMPORARY, behind a removable flag).
-   Enable with `?debugDeeplink=1` in the URL or
-   `localStorage.setItem('sf_debug_deeplink','1')`. Off by default, so it
-   emits nothing in normal use. Remove this block (and the dlog calls) once the
-   context-menu → note deep-link flow is confirmed working in Chrome.
-   -------------------------------------------------------------------------- */
-const DEBUG_DEEPLINK = (() => {
-  try {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('debugDeeplink') === '1') return true;
-    return typeof localStorage !== 'undefined' && localStorage.getItem('sf_debug_deeplink') === '1';
-  } catch { return false; }
-})();
-function dlog(...args) {
-  if (DEBUG_DEEPLINK) console.log('[StudyFlow deep-link]', ...args);
-}
-
-/**
- * Diagnostic helper: is the local→cloud migration marked complete for this user
- * in THIS browser profile? Cloud mode is gated on this flag in both
- * repository.js (RepositoryFactory.init) and app.js (renderAuthNav), and the
- * flag lives in this browser's localStorage — so a user can be signed in yet
- * still run in local mode here. Returns true/false (or null if it can't tell).
- */
-function migrationCompleted(user) {
-  try {
-    const m = (typeof window !== 'undefined') ? window.StudyFlowMigration : null;
-    if (!user || !user.id || !m || typeof m.isCompleted !== 'function') return false;
-    return !!m.isCompleted(user.id);
-  } catch { return null; }
-}
-
-/** Mirrors storage.js _getActiveKey('sp_notes') so diagnostics show the exact
- *  localStorage key Store.getNote reads from under the current mode. */
-function activeNotesKey() {
-  try {
-    const rf = (typeof window !== 'undefined' && window.StudyFlowRepository)
-      ? window.StudyFlowRepository.RepositoryFactory : null;
-    if (rf && rf.getMode && rf.getMode() === 'cloud' && rf.getActiveUserId && rf.getActiveUserId()) {
-      return 'sp_cloud_sp_notes_' + rf.getActiveUserId();
-    }
-  } catch { /* fall through to base key */ }
-  return 'sp_notes';
-}
 
 document.addEventListener('DOMContentLoaded', () => {
   readUrlParams();
@@ -108,9 +63,6 @@ function handleUrlDeepLinks() {
   // 2. Check direct note deep-link (?noteId=...)
   if (params.has('noteId')) {
     const noteId = params.get('noteId');
-    dlog('deep-link start; noteId =', noteId, '; url =', (typeof window !== 'undefined') ? window.location.href : '');
-    dlog('window.Auth present =', !!(typeof window !== 'undefined' && window.Auth),
-      '; this noteId must equal the extension createNote id logged in the service-worker console');
 
     // The synchronous snapshot is often empty here: on a fresh page load the
     // Supabase session restore (Auth.init) and the cloud-mode selection it
@@ -118,14 +70,12 @@ function handleUrlDeepLinks() {
     // So do not decide "not found" from the initial in-memory snapshot —
     // resolve against a fully initialized repository first.
     const immediate = Store.getNote(noteId);
-    dlog('Store.getNote before readiness =', immediate ? 'HIT' : 'miss', '; read key =', activeNotesKey());
     if (immediate) {
       openNoteDetailModal(noteId);
       return;
     }
 
     resolveNoteFromCloud(noteId).then(resolved => {
-      dlog('resolve result =', resolved ? 'HIT' : 'miss');
       if (resolved) {
         render();
         // Pass the resolved row so the modal can display a cloud-only note even
@@ -169,23 +119,14 @@ async function resolveNoteFromCloud(noteId) {
     const mode = rf && typeof rf.getMode === 'function' ? rf.getMode() : 'n/a';
     const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
       ? window.Auth.getUser() : null;
-    dlog('after readiness: rf =', !!rf, '; mode =', mode,
-      '; user =', user ? user.id : 'none',
-      '; migrationCompleted =', migrationCompleted(user));
 
     // (A) Cloud mode — hydrate the per-user cache, then read via the same key.
     if (rf && mode === 'cloud') {
       const repo = rf.getActive();
-      dlog('active repo =', repo && repo.constructor ? repo.constructor.name : typeof repo,
-        '; hydrateCache =', !!(repo && typeof repo.hydrateCache === 'function'),
-        '; cloud cache key =', user ? ('sp_cloud_sp_notes_' + user.id) : 'sp_cloud_sp_notes_<uid>');
       if (repo && typeof repo.hydrateCache === 'function') {
-        dlog('hydrateCache: start');
         await repo.hydrateCache();
-        dlog('hydrateCache: complete');
       }
       const hit = Store.getNote(noteId);
-      dlog('cloud-mode Store.getNote =', hit ? 'HIT' : 'miss', '; read key =', activeNotesKey());
       if (hit) return hit;
     }
 
@@ -194,21 +135,17 @@ async function resolveNoteFromCloud(noteId) {
     if (rf && user && user.id && typeof rf.getRepository === 'function') {
       const cloud = rf.getRepository('cloud');
       if (cloud && typeof cloud.getNote === 'function') {
-        dlog('direct cloud getNote (mode =', mode + '): start');
         const row = await cloud.getNote(noteId);
-        dlog('direct cloud getNote =', row ? 'HIT' : 'miss');
         if (row) return row;
       }
     }
 
     // (C) Final fallback: the local store (genuine local note, or not found).
     const local = Store.getNote(noteId);
-    dlog('final Store.getNote =', local ? 'HIT' : 'miss', '; read key =', activeNotesKey());
     return local;
   } catch (err) {
     // Surface the real reason instead of hiding it behind "not found".
     console.error('[StudyFlow] deep-link cloud resolve failed:', err);
-    dlog('resolve error:', err && err.message);
     return null;
   }
 }
@@ -223,21 +160,14 @@ async function resolveNoteFromCloud(noteId) {
  */
 async function ensureRepositoryReady() {
   if (typeof window !== 'undefined' && window.Auth && typeof window.Auth.init === 'function') {
-    dlog('awaiting Auth.init()');
-    try { await window.Auth.init(); } catch (e) { dlog('Auth.init error:', e && e.message); }
-    dlog('Auth.init resolved; user =', (window.Auth.getUser && window.Auth.getUser()) ? window.Auth.getUser().id : 'none');
+    try { await window.Auth.init(); } catch { /* Continue with local fallback if auth is unavailable. */ }
   }
   const repoModule = (typeof window !== 'undefined' && window.StudyFlowRepository)
     ? window.StudyFlowRepository
     : null;
   const rf = repoModule && repoModule.RepositoryFactory;
-  dlog('RepositoryFactory present =', !!rf);
-  if (rf && typeof rf.getMode === 'function') dlog('mode before init =', rf.getMode());
   if (rf && typeof rf.init === 'function') {
-    dlog('awaiting RepositoryFactory.init()');
-    try { await rf.init(); } catch (e) { dlog('RepositoryFactory.init error:', e && e.message); }
-    dlog('RepositoryFactory.init resolved; mode after init =', rf.getMode(),
-      '; activeUserId =', typeof rf.getActiveUserId === 'function' ? rf.getActiveUserId() : 'n/a');
+    try { await rf.init(); } catch { /* Continue with the available repository state. */ }
   }
   return rf;
 }
@@ -398,10 +328,75 @@ function highlightText(text = '', query = '') {
 }
 
 /* ==========================================================================
+   Note list: merge local + cloud (when authenticated but migration incomplete)
+   ========================================================================== */
+
+/**
+ * Returns the notes to display in the main list.
+ *
+ * When the RepositoryFactory is in 'cloud' mode, delegates to the active
+ * (cloud) repository as before — no change to existing behavior.
+ *
+ * When in 'local' mode BUT the user is authenticated, also fetches the
+ * user's cloud notes (RLS-scoped via CloudRepository.getNotes) and merges
+ * them with local notes. This surfaces extension-created notes and any
+ * notes created in a migrated browser, without switching the app to cloud
+ * mode or writing fake local records.
+ *
+ * Merge rule: local notes win on ID collision (preserves local edits);
+ * cloud-only notes are appended. Returns local notes immediately on any
+ * error so the list is never emptied by a cloud fetch failure.
+ */
+async function getDisplayNotes() {
+  const rf = (typeof window !== 'undefined' && window.StudyFlowRepository && window.StudyFlowRepository.RepositoryFactory) || null;
+  const mode = rf && typeof rf.getMode === 'function' ? rf.getMode() : 'local';
+
+  if (mode === 'cloud') {
+    const repo = rf.getActive();
+    if (repo && typeof repo.getNotes === 'function') {
+      try { return await repo.getNotes(); } catch { return Store.getNotes(); }
+    }
+    return Store.getNotes();
+  }
+
+  // Local mode: check if user is authenticated for cloud supplement
+  const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+    ? window.Auth.getUser() : null;
+  if (!user || !user.id) return Store.getNotes();
+
+  const localNotes = Store.getNotes();
+
+  // Try to fetch cloud notes without switching global mode
+  try {
+    if (!rf || typeof rf.getRepository !== 'function') return localNotes;
+    const cloudRepo = rf.getRepository('cloud');
+    if (!cloudRepo || typeof cloudRepo.getNotes !== 'function') return localNotes;
+
+    const cloudNotes = await cloudRepo.getNotes();
+    if (!Array.isArray(cloudNotes)) return localNotes;
+
+    // Merge: local wins on ID collision, cloud-only notes appended
+    const localIds = new Set(localNotes.map(n => n.id));
+    const cloudOnly = cloudNotes.filter(n => !localIds.has(n.id));
+    return [...localNotes, ...cloudOnly];
+  } catch (err) {
+    return localNotes;
+  }
+}
+
+/* ==========================================================================
    Render main view
    ========================================================================== */
 function render() {
-  const allNotes = Store.getNotes();
+  getDisplayNotes().then(allNotes => {
+    _renderNotes(allNotes);
+  }).catch(() => {
+    // On any async rejection, render local notes so the list is never empty
+    _renderNotes(Store.getNotes());
+  });
+}
+
+function _renderNotes(allNotes) {
   const allSubjects = Store.getSubjects();
   const subjectsMap = {};
   allSubjects.forEach(s => { subjectsMap[s.id] = s; });
@@ -454,7 +449,7 @@ function render() {
     const renderedContent = view.search ? highlightText(n.content, view.search) : App.escapeHtml(n.content);
 
     return `
-      <article class="note-card ${n.pinned ? 'note-card--pinned' : ''}" data-id="${n.id}" tabindex="0" role="listitem" aria-label="Note: ${App.escapeHtml(n.title)}">
+      <article class="note-card ${n.pinned ? 'note-card--pinned' : ''}" data-id="${n.id}" data-note='${JSON.stringify(n).replace(/'/g, '&#39;')}' tabindex="0" role="listitem" aria-label="Note: ${App.escapeHtml(n.title)}">
         <div class="note-card__head">
           <div class="note-card__title-wrap">
             ${n.pinned ? '<span class="note-pin-indicator" title="Pinned Note" aria-label="Pinned">📌</span>' : ''}
@@ -540,15 +535,17 @@ function renderStatsStrip(notes, subjects) {
 function wireCards() {
   App.qsa('.note-card').forEach(card => {
     const id = card.dataset.id;
+    let cardNote = null;
+    try { cardNote = card.dataset.note ? JSON.parse(card.dataset.note) : null; } catch { cardNote = null; }
 
     // Card click opens detail modal
-    card.addEventListener('click', () => openNoteDetailModal(id));
+    card.addEventListener('click', () => openNoteDetailModal(id, cardNote));
 
     // Keyboard navigation: Enter or Space opens detail modal
     card.addEventListener('keydown', e => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        openNoteDetailModal(id);
+        openNoteDetailModal(id, cardNote);
       }
     });
 
@@ -570,9 +567,7 @@ function wireCards() {
     if (pinBtn) {
       pinBtn.addEventListener('click', e => {
         e.stopPropagation();
-        const newPinned = Store.togglePinNote(id);
-        App.toast(newPinned ? 'Note pinned to top 📌' : 'Note unpinned', 'info');
-        render();
+        pinNoteFromCard(id, cardNote);
       });
     }
 
@@ -581,7 +576,7 @@ function wireCards() {
     if (copyBtn) {
       copyBtn.addEventListener('click', e => {
         e.stopPropagation();
-        const note = Store.getNote(id);
+        const note = Store.getNote(id) || cardNote;
         if (note && navigator.clipboard) {
           navigator.clipboard.writeText(`${note.title}\n\n${note.content}`)
             .then(() => App.toast('Note copied to clipboard!', 'success'))
@@ -595,6 +590,11 @@ function wireCards() {
     if (editBtn) {
       editBtn.addEventListener('click', e => {
         e.stopPropagation();
+        // Seed activeDetail so openNoteModal can resolve a cloud-only note.
+        if (!Store.getNote(id) && cardNote) {
+          view.activeDetailId = id;
+          view.activeDetailNote = cardNote;
+        }
         openNoteModal(id);
       });
     }
@@ -604,13 +604,18 @@ function wireCards() {
     if (deleteBtn) {
       deleteBtn.addEventListener('click', e => {
         e.stopPropagation();
-        const note = Store.getNote(id);
+        const note = Store.getNote(id) || cardNote;
         if (!note) return;
 
         const doDelete = () => {
-          Store.deleteNote(id);
-          App.toast('Note deleted', 'info');
-          render();
+          deleteNoteFromCard(id, note).then(ok => {
+            if (ok) {
+              App.toast('Note deleted', 'info');
+              render();
+            } else {
+              App.toast('Could not delete note', 'error');
+            }
+          });
         };
 
         const confirmDelete = Store.getSettings().preferences?.confirmDelete !== false;
@@ -628,6 +633,55 @@ function wireCards() {
     }
   });
 }
+
+/**
+ * Pin/unpin a note from its list card. Routes cloud-only notes (present in the
+ * merged display list but absent from local Store) through the cloud repo so
+ * the change persists; local notes stay on Store.togglePinNote.
+ */
+async function pinNoteFromCard(id, cardNote) {
+  const localNote = Store.getNote(id);
+  if (localNote) {
+    const newPinned = Store.togglePinNote(id);
+    App.toast(newPinned ? 'Note pinned to top 📌' : 'Note unpinned', 'info');
+    render();
+    return;
+  }
+  const note = cardNote;
+  if (!note) { App.toast('Note not found', 'error'); return; }
+  const repo = repoForActiveNote();
+  if (!repo || typeof repo.saveNote !== 'function') {
+    App.toast('Could not pin note', 'error');
+    return;
+  }
+  try {
+    const saved = await repo.saveNote({ id: note.id, title: note.title, content: note.content, subjectId: note.subjectId || '', pinned: !note.pinned });
+    App.toast(saved.pinned ? 'Note pinned to top 📌' : 'Note unpinned', 'info');
+    render();
+  } catch (err) {
+    App.toast('Could not pin note', 'error');
+  }
+}
+
+/**
+ * Delete a note from its list card. Cloud-only notes are removed through the
+ * cloud repo (RLS-scoped); local notes through the local Store.
+ */
+async function deleteNoteFromCard(id, note) {
+  const localNote = Store.getNote(id);
+  if (localNote) {
+    Store.deleteNote(id);
+    return true;
+  }
+  const repo = repoForActiveNote();
+  if (!repo || typeof repo.deleteNote !== 'function') return false;
+  try {
+    return Boolean(await repo.deleteNote(note.id));
+  } catch (err) {
+    return false;
+  }
+}
+
 
 function countWords(text = '') {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
@@ -680,12 +734,17 @@ function bindModals() {
   const detailCopyBtn = App.qs('#detailCopyBtn');
   if (detailCopyBtn) {
     detailCopyBtn.addEventListener('click', () => {
-      if (!view.activeDetailId) return;
-      const note = Store.getNote(view.activeDetailId);
-      if (note && navigator.clipboard) {
+      if (!view.activeDetailId) {
+        return;
+      }
+      const note = getActiveDetailNote();
+      if (!note) {
+        return;
+      }
+      if (navigator.clipboard) {
         navigator.clipboard.writeText(`${note.title}\n\n${note.content}`)
           .then(() => App.toast('Note copied to clipboard!', 'success'))
-          .catch(() => App.toast('Could not copy note', 'error'));
+          .catch(err => { console.error('[StudyFlow] Failed to copy note:', err); App.toast('Could not copy note', 'error'); });
       }
     });
   }
@@ -693,11 +752,10 @@ function bindModals() {
   const detailPinBtn = App.qs('#detailPinBtn');
   if (detailPinBtn) {
     detailPinBtn.addEventListener('click', () => {
-      if (!view.activeDetailId) return;
-      const isPinned = Store.togglePinNote(view.activeDetailId);
-      App.toast(isPinned ? 'Note pinned to top 📌' : 'Note unpinned', 'info');
-      openNoteDetailModal(view.activeDetailId);
-      render();
+      if (!view.activeDetailId) {
+        return;
+      }
+      pinDetailNote();
     });
   }
 
@@ -705,24 +763,35 @@ function bindModals() {
   if (detailEditBtn) {
     detailEditBtn.addEventListener('click', () => {
       const noteId = view.activeDetailId;
+      if (!noteId) return;
       App.closeModal('#noteDetailModal');
-      if (noteId) openNoteModal(noteId);
+      openNoteModal(noteId);
     });
   }
 
   const detailDeleteBtn = App.qs('#detailDeleteBtn');
   if (detailDeleteBtn) {
     detailDeleteBtn.addEventListener('click', () => {
-      if (!view.activeDetailId) return;
-      const note = Store.getNote(view.activeDetailId);
-      if (!note) return;
+      if (!view.activeDetailId) {
+        return;
+      }
+      const note = getActiveDetailNote();
+      if (!note) {
+        return;
+      }
 
       const doDelete = () => {
-        Store.deleteNote(view.activeDetailId);
-        App.closeModal('#noteDetailModal');
-        view.activeDetailId = null;
-        App.toast('Note deleted', 'info');
-        render();
+        deleteDetailNote(note).then(ok => {
+          if (ok) {
+            App.closeModal('#noteDetailModal');
+            view.activeDetailId = null;
+            view.activeDetailNote = null;
+            App.toast('Note deleted', 'info');
+            render();
+          } else {
+            App.toast('Could not delete note', 'error');
+          }
+        });
       };
 
       const confirmDelete = Store.getSettings().preferences?.confirmDelete !== false;
@@ -738,11 +807,90 @@ function bindModals() {
       }
     });
   }
+
+  /** Pin/unpin the currently-open detail note, routing cloud-only notes to the
+   *  cloud repository so the change persists to Supabase instead of being lost
+   *  on a local Store that never held the note. */
+  async function pinDetailNote() {
+    const note = getActiveDetailNote();
+    if (!note) {
+      App.toast('Note not found', 'error');
+      return;
+    }
+    const repo = repoForActiveNote();
+    try {
+      if (repo && typeof repo.saveNote === 'function') {
+        const saved = await repo.saveNote({ id: note.id, title: note.title, content: note.content, subjectId: note.subjectId || '', pinned: !note.pinned });
+        // Refresh the retained/local copy and re-open to reflect the new state.
+        view.activeDetailNote = saved;
+        if (Store.getNote(note.id)) Store.saveNote({ ...saved, id: note.id });
+        openNoteDetailModal(view.activeDetailId, saved);
+      } else {
+        const isPinned = Store.togglePinNote(view.activeDetailId);
+        App.toast(isPinned ? 'Note pinned to top 📌' : 'Note unpinned', 'info');
+        openNoteDetailModal(view.activeDetailId, view.activeDetailNote);
+      }
+      render();
+    } catch (err) {
+      console.error('[StudyFlow] Failed to pin note:', err);
+      App.toast('Could not pin note', 'error');
+    }
+  }
+
+  /** Delete the currently-open note, routing cloud-only notes through the cloud
+   *  repository (RLS-scoped) so they are actually removed from Supabase. */
+  async function deleteDetailNote(note) {
+    const repo = repoForActiveNote();
+    try {
+      if (repo && typeof repo.deleteNote === 'function') {
+        const ok = await repo.deleteNote(note.id);
+        return Boolean(ok);
+      }
+      Store.deleteNote(note.id);
+      return true;
+    } catch (err) {
+      console.error('[StudyFlow] Failed to delete note:', err);
+      return false;
+    }
+  }
 }
 
 /* ==========================================================================
    Open Add / Edit Modal
    ========================================================================== */
+/**
+ * Returns the currently-open detail note.
+ * Prefers the retained deep-link note (which may be cloud-only and absent from
+ * the local Store), then falls back to the local Store. Never fabricates a note.
+ */
+function getActiveDetailNote() {
+  const id = view.activeDetailId;
+  if (!id) {
+    return null;
+  }
+  const fromRetained = view.activeDetailNote;
+  const fromStore = Store.getNote(id);
+  return fromRetained || fromStore || null;
+}
+
+/**
+ * Returns the repository to use for mutating the currently-open note.
+ * Cloud-only deep-linked notes must be mutated through the cloud repository
+ * (RLS-scoped) even when the app is in local mode; ordinary local notes stay
+ * in the local Store. No global mode switch, no fake local note.
+ */
+function repoForActiveNote() {
+  const m = (typeof window !== 'undefined') ? window.StudyFlowRepository : null;
+  const rf = m && m.RepositoryFactory;
+  if (!rf || typeof rf.getRepository !== 'function') return null;
+  // Use the cloud repo when the open note came from / should live in the cloud.
+  if (rf.getMode && rf.getMode() === 'cloud') return rf.getRepository('cloud');
+  const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+    ? window.Auth.getUser() : null;
+  if (user && user.id) return rf.getRepository('cloud'); // RLS-scoped; works for cloud-only notes too
+  return null;
+}
+
 function openNoteModal(id = null, preselectedSubjectId = null) {
   const form = App.qs('#noteForm');
   if (!form) return;
@@ -750,7 +898,9 @@ function openNoteModal(id = null, preselectedSubjectId = null) {
   App.qsa('.field').forEach(f => f.classList.remove('invalid'));
 
   if (id) {
-    const n = Store.getNote(id);
+    const n = (view.activeDetailNote && view.activeDetailNote.id === id)
+      ? view.activeDetailNote
+      : (Store.getNote(id) || (view.activeDetailId === id ? view.activeDetailNote : null));
     if (!n) {
       App.toast('Note not found', 'error');
       return;
@@ -805,10 +955,24 @@ function handleSubmitNote(e) {
   };
   if (id) data.id = id;
 
-  Store.saveNote(data);
-  App.closeModal('#noteModal');
-  App.toast(id ? 'Note updated' : 'Note created successfully', 'success');
-  render();
+  const repo = repoForActiveNote();
+  const savePromise = (repo && typeof repo.saveNote === 'function')
+    ? repo.saveNote(data).then(saved => {
+        if (Store.getNote(id)) Store.saveNote({ ...saved, id });
+        return saved;
+      })
+    : (Store.saveNote(data), Promise.resolve(data));
+  savePromise
+    .then(saved => {
+      view.activeDetailNote = saved || view.activeDetailNote;
+      App.closeModal('#noteModal');
+      App.toast(id ? 'Note updated' : 'Note created successfully', 'success');
+      render();
+    })
+    .catch(err => {
+      console.error('[StudyFlow] Failed to save note:', err);
+      App.toast('Could not save note', 'error');
+    });
 }
 
 /* ==========================================================================
@@ -819,6 +983,9 @@ function openNoteDetailModal(id, fallbackNote) {
   // (local-mode) Store cache. Store is preferred when present so edits/pins stay
   // in sync; the fallback is the real fetched row, never a fabricated note.
   const note = Store.getNote(id) || fallbackNote || null;
+  // Retain the resolved note so the detail actions (pin/edit/delete/copy) can
+  // operate on it when it lives in the cloud but not in the local Store.
+  view.activeDetailNote = note || null;
   if (!note) {
     App.toast('Note not found', 'error');
     return;
@@ -979,4 +1146,3 @@ function wireEmptyStateActions() {
     });
   }
 }
-

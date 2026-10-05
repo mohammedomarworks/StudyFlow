@@ -135,7 +135,6 @@ async function handleContextMenuClick(info, tab) {
   // One intentional note per user action.
   const key = `${menuId}|${pageUrl}|${selectionText}`;
   if (isDuplicateClick(key)) {
-    console.log('[StudyFlow] Ignoring duplicate context-menu click.');
     return;
   }
 
@@ -164,9 +163,6 @@ async function handleContextMenuClick(info, tab) {
   try {
     const created = await api.createNote(payload);
     const deepLink = created && created.id ? cm.buildNoteDeepLink(created.id) : null;
-    // TEMPORARY diagnostics: confirm the real returned DB id and the exact deep
-    // link opened. Remove once the Chrome context-menu flow is verified.
-    console.log('[StudyFlow] createNote returned id:', created && created.id, '→ deep link:', deepLink);
     await openStudyFlowUrl(deepLink || cm.notesPageUrl());
   } catch (err) {
     console.error('[StudyFlow] createNote failed:', err);
