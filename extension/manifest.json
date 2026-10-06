@@ -15,7 +15,8 @@
   },
   "permissions": [
     "sidePanel",
-    "storage"
+    "storage",
+    "contextMenus"
   ],
   "icons": {
     "16": "src/assets/icons/icon-16.png",
