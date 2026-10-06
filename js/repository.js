@@ -305,9 +305,17 @@
     }
 
     _toDbNote(data, userId) {
+      // subject_id is a `uuid` column (FK → subjects.id). A note edited from the
+      // merged list carries a subject id chosen from the LOCAL subject dropdown,
+      // whose ids are non-UUID in local mode (Store.generateId → base36). Sending
+      // such a value makes PostgREST reject the upsert with 400 / 22P02
+      // "invalid input syntax for type uuid". Only forward a real UUID; anything
+      // else (local id, '', undefined) maps to NULL — i.e. "no subject".
+      const rawSubject = (typeof data.subjectId === 'string') ? data.subjectId.trim() : '';
+      const subjectId = isUUID(rawSubject) ? rawSubject : null;
       return {
         user_id: userId,
-        subject_id: (data.subjectId && typeof data.subjectId === 'string' && data.subjectId.trim()) ? data.subjectId.trim() : null,
+        subject_id: subjectId,
         title: (typeof data.title === 'string' && data.title.trim()) ? data.title.trim() : 'Untitled Note',
         content: typeof data.content === 'string' ? data.content : '',
         tags: Array.isArray(data.tags) ? data.tags.filter(t => typeof t === 'string') : [],

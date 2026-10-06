@@ -434,6 +434,49 @@ export async function saveStudySession(sessionData) {
 }
 
 /**
+ * Creates a note in the shared Supabase `notes` table.
+ *
+ * Matches the web app's `_toDbNote` conventions exactly (title / content /
+ * subject_id / tags / pinned); no invented columns. Source metadata is encoded
+ * into the plain-text `content` by the caller — the schema has no url column.
+ *
+ * IDEMPOTENCY: an optional client-generated UUID `id` enables upsert with
+ * `onConflict: 'id'`, so a double-fired context-menu click cannot create two
+ * rows. `user_id` is always taken from the authenticated session.
+ */
+export async function createNote(noteData) {
+  const user = await requireUser();
+  const client = getSupabaseClient();
+
+  const payload = {
+    user_id: user.id,
+    title: (typeof noteData.title === 'string' && noteData.title.trim()) ? noteData.title.trim() : 'Untitled Note',
+    content: typeof noteData.content === 'string' ? noteData.content : '',
+    subject_id: (noteData.subjectId && typeof noteData.subjectId === 'string' && noteData.subjectId.trim())
+      ? noteData.subjectId.trim()
+      : null,
+    tags: Array.isArray(noteData.tags) ? noteData.tags.filter(t => typeof t === 'string') : [],
+    pinned: Boolean(noteData.pinned)
+  };
+  if (noteData.id && typeof noteData.id === 'string') {
+    payload.id = noteData.id;
+  }
+
+  const query = payload.id
+    ? client.from('notes').upsert(payload, { onConflict: 'id' })
+    : client.from('notes').insert(payload);
+
+  const { data, error } = await query.select('id, title').single();
+
+  if (error) {
+    console.error('[StudyFlow API] createNote error:', error);
+    throw new Error(`Failed to create note: ${error.message}`);
+  }
+
+  return data;
+}
+
+/**
  * Creates minimal Realtime subscription for tasks and habits.
  */
 export function subscribeToRealtimeChanges(userId, { onTasksChange, onHabitsChange, onStatusChange }) {
@@ -495,5 +538,6 @@ export default {
   toggleHabit,
   getSettings,
   saveStudySession,
+  createNote,
   subscribeToRealtimeChanges
 };

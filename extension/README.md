@@ -27,14 +27,14 @@ The extension talks directly to the same Supabase backend as the web app
   - **In-panel Focus timer** → run a real Pomodoro focus session inside the Side Panel (see below).
   - **Open StudyFlow** → opens the web app.
   - Sign out.
+- **Right-click context menu**: on any normal web page, right-click to
+  **StudyFlow → Save page as Note** or, over a text selection, **Save selected
+  text as Note** (see below).
 - **Realtime refresh**: subscribes to `tasks`, `habits`, and `habit_completions`
   changes for the signed-in user, so edits made on the web appear in the panel.
 - **Offline handling**: detects offline state, shows an offline banner, disables
   writes, and restores data when the connection returns — no silent data loss.
 - Light/dark theme toggle.
-
-Deliberately **out of scope** for v2.1.0 (planned for later): context menu,
-save webpage / selected text, and new-tab replacement.
 
 ---
 
@@ -130,6 +130,49 @@ longer just opens the web timer in a new tab (the web timer at
 
 ---
 
+## Context menu (Save page / selection as Note)
+
+Right-clicking a normal web page shows a **StudyFlow** submenu with two items:
+
+- **Save page as Note** (page context) — captures the page title and URL as a
+  new note with content `Source: <url>` and a `web-clip` tag.
+- **Save selected text as Note** (selection context) — captures the highlighted
+  text plus the page title and URL, structured as
+  `<selected text>\n\nSource:\n<title>\n<url>`.
+
+Behavior and safety:
+
+- **Menus** are created in the service worker with `chrome.contextMenus.create`
+  and handled through a single `chrome.contextMenus.onClicked` listener (no
+  inline `onclick` callbacks). The only new permission is `contextMenus`.
+- **Untrusted input:** the page title, URL, and selected text are all treated as
+  untrusted **plain text**. Payloads are plain strings — no HTML is built,
+  injected, or parsed, and there are no `innerHTML`/`document.write` sinks. Pure,
+  unit-tested helpers live in [`src/shared/context-menu.js`](src/shared/context-menu.js).
+- **Note schema:** notes are written through the shared
+  [`api.createNote`](src/shared/api.js) into the existing Supabase `notes` table
+  (`title` / `content` / `subject_id` / `tags` / `pinned`). The schema has **no
+  URL column**, so the source is encoded into `content`; no columns are invented.
+  `user_id` is always taken from the authenticated session, never from input.
+- **Subject assignment:** a captured note is created unassigned, then the web
+  note page is opened (`pages/notes.html?noteId=<id>`) so the subject can be set
+  there — the extension does not build an in-page modal.
+- **Signed out:** no cloud write is attempted; the StudyFlow auth page
+  (`pages/auth.html`) is opened instead.
+- **Offline:** the write is blocked (consistent with the rest of the extension);
+  the notes page is opened rather than pretending a note was saved. There is no
+  new offline queue.
+- **Safe URLs / no open redirect:** every tab the extension opens is validated
+  with `URL()` and must be `https:` on the `studyflow-productivity.netlify.app`
+  origin; `javascript:`, other hosts, and malformed URLs are rejected.
+- **Duplicate protection:** an in-memory debounce (1.5 s, keyed on menu id + URL
+  + selection) ignores duplicate click events from a single action, and
+  `createNote` additionally supports an idempotent `onConflict: 'id'` upsert.
+- **Page types:** works on normal `http(s)` pages; on `chrome://`, the Web Store,
+  and extension pages the menu simply does nothing harmful.
+
+---
+
 Configuration lives in [`src/shared/config.js`](src/shared/config.js) and contains
 **only public values**:
 
@@ -156,9 +199,11 @@ The manifest requests the **minimum** permissions only:
 |-------------|-----|
 | `sidePanel` | Open and render the extension UI in the browser Side Panel. |
 | `storage`   | Persist the Supabase auth session and the theme preference. |
+| `contextMenus` | Add the StudyFlow right-click menu (Save page / selection as Note). |
 
 No `tabs`, `history`, `bookmarks`, `activeTab`, `scripting`, `cookies`, or
-`<all_urls>` host permissions are requested.
+`<all_urls>` host permissions are requested. Opening tabs uses
+`chrome.tabs.create`, which does not require the `tabs` permission.
 
 ---
 
