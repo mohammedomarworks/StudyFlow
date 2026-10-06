@@ -21,14 +21,23 @@ const view = {
   activeDetailNote: null   // retains the currently-open note (incl. cloud-only rows)
 };
 
-document.addEventListener('DOMContentLoaded', () => {
-  readUrlParams();
-  populateSubjectDropdowns();
-  bindToolbar();
-  bindModals();
-  render();
-  handleUrlDeepLinks();
-});
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', () => {
+    readUrlParams();
+    populateSubjectDropdowns();
+    bindToolbar();
+    bindModals();
+    render();
+    handleUrlDeepLinks();
+  });
+
+  const repoModule = (typeof window !== 'undefined' && window.StudyFlowRepository) ? window.StudyFlowRepository : null;
+  if (repoModule && repoModule.RepositoryFactory && typeof repoModule.RepositoryFactory.onModeChange === 'function') {
+    repoModule.RepositoryFactory.onModeChange(() => {
+      populateSubjectDropdowns();
+    });
+  }
+}
 
 function readUrlParams() {
   const params = new URLSearchParams(window.location.search);
@@ -173,11 +182,456 @@ async function ensureRepositoryReady() {
 }
 
 /* ==========================================================================
-   Subject dropdowns
+   Subject Architecture, Mapping & Dropdowns
    ========================================================================== */
+function isUUID(str) {
+  return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str.trim());
+}
+
+function generateUUID() {
+  if (typeof crypto !== 'undefined') {
+    if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+    if (typeof crypto.getRandomValues === 'function') {
+      return ([1e7] + -1e3 + -4e3 + -8e3 + -1e11).replace(/[018]/g, c =>
+        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+      );
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function getMigrationIdMap(userId) {
+  const empty = { subjects: {}, tasks: {}, habits: {}, notes: {}, sessions: {} };
+  if (!userId) return empty;
+  const migration = (typeof window !== 'undefined' && window.StudyFlowMigration)
+    ? window.StudyFlowMigration
+    : (typeof global !== 'undefined' ? global.StudyFlowMigration : null);
+  if (migration && typeof migration._getIdMap === 'function') {
+    return migration._getIdMap(userId);
+  }
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem(`sp_migration_map_${userId}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          subjects: parsed.subjects || {},
+          tasks: parsed.tasks || {},
+          habits: parsed.habits || {},
+          notes: parsed.notes || {},
+          sessions: parsed.sessions || {}
+        };
+      }
+    }
+  } catch {}
+  return empty;
+}
+
+function saveMigrationIdMap(userId, idMap) {
+  if (!userId) return;
+  const migration = (typeof window !== 'undefined' && window.StudyFlowMigration)
+    ? window.StudyFlowMigration
+    : (typeof global !== 'undefined' ? global.StudyFlowMigration : null);
+  if (migration && typeof migration._saveIdMap === 'function') {
+    migration._saveIdMap(userId, idMap);
+    return;
+  }
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`sp_migration_map_${userId}`, JSON.stringify(idMap));
+    }
+  } catch (e) {
+    console.error('[StudyFlow] Failed to save migration ID map:', e);
+  }
+}
+
+function isCloudNote(noteOrId) {
+  const m = typeof window !== 'undefined' ? window.StudyFlowRepository : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+  const rf = m && m.RepositoryFactory;
+  if (rf && typeof rf.getMode === 'function' && rf.getMode() === 'cloud') {
+    return true;
+  }
+  if (!noteOrId) return false;
+  const id = (typeof noteOrId === 'object' && noteOrId !== null) ? noteOrId.id : noteOrId;
+  if (!id) return false;
+  // If the note exists in local Store, it is a local note!
+  if (typeof Store !== 'undefined' && typeof Store.getNote === 'function') {
+    const local = Store.getNote(id);
+    if (local) return false;
+  }
+  if (isUUID(id)) return true;
+  if (view.activeDetailNote && view.activeDetailNote.id === id && isUUID(view.activeDetailNote.id)) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Resolves a selected subject ID for a cloud-backed note to a real cloud subject UUID.
+ * Supports:
+ * - valid cloud subject UUID -> preserves UUID directly
+ * - empty / missing subject -> null
+ * - local subject ID -> maps to existing cloud UUID from persistent migration map,
+ *   or provisions a new cloud subject through CloudRepository.saveSubject and
+ *   persists the local->cloud mapping to sp_migration_map_${userId}.
+ *   (Never silently associates by subject name due to non-unique subject names).
+ * - missing/deleted subject -> null
+ */
+async function resolveCloudSubjectId(subjectId) {
+  if (!subjectId || typeof subjectId !== 'string') return null;
+  const trimmed = subjectId.trim();
+  if (!trimmed) return null;
+
+  // 1. Valid UUID: keep directly
+  if (isUUID(trimmed)) {
+    return trimmed;
+  }
+
+  // 2. Local-only subject ID (e.g. "s1", "mupjxnjyy3f4m")
+  const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+    ? window.Auth.getUser() : null;
+  if (!user || !user.id) return null;
+
+  const idMap = getMigrationIdMap(user.id);
+  if (idMap.subjects && idMap.subjects[trimmed] && isUUID(idMap.subjects[trimmed])) {
+    return idMap.subjects[trimmed];
+  }
+
+  // Find local subject metadata
+  let localSubj = Store.getSubject(trimmed);
+  if (!localSubj && typeof Store._read === 'function') {
+    try {
+      const rawLocal = Store._read('sp_subjects', []);
+      if (Array.isArray(rawLocal)) {
+        localSubj = rawLocal.find(s => s && s.id === trimmed) || null;
+      }
+    } catch {}
+  }
+  if (!localSubj && typeof localStorage !== 'undefined') {
+    try {
+      const rawLocal = localStorage.getItem('sp_subjects');
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        if (Array.isArray(parsed)) {
+          localSubj = parsed.find(s => s && s.id === trimmed) || null;
+        }
+      }
+    } catch {}
+  }
+  if (!localSubj) {
+    // Missing or deleted subject: clearly keep unassigned
+    return null;
+  }
+
+  const m = (typeof window !== 'undefined') ? window.StudyFlowRepository : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+  const rf = m && m.RepositoryFactory;
+  if (!rf || typeof rf.getRepository !== 'function') return null;
+  const cloudRepo = rf.getRepository('cloud');
+  if (!cloudRepo) return null;
+
+  try {
+    // Provision through existing supported CloudRepository API
+    if (typeof cloudRepo.saveSubject === 'function') {
+      const cloudSubjectId = generateUUID();
+      const saved = await cloudRepo.saveSubject({
+        id: cloudSubjectId,
+        name: localSubj.name,
+        color: localSubj.color,
+        teacher: localSubj.teacher,
+        code: localSubj.code,
+        examDate: localSubj.examDate
+      });
+
+      const finalId = (saved && isUUID(saved.id)) ? saved.id : cloudSubjectId;
+      idMap.subjects = idMap.subjects || {};
+      idMap.subjects[trimmed] = finalId;
+      saveMigrationIdMap(user.id, idMap);
+      return finalId;
+    }
+    return null;
+  } catch (err) {
+    console.error('[StudyFlow] Failed to resolve cloud subject for note:', err);
+    return null;
+  }
+}
+
+/**
+ * Synchronously retrieves all available subjects from every possible store:
+ * 1. Store.getSubjects() (in local mode reads sp_subjects; in cloud mode reads cloud cache)
+ * 2. Raw localStorage['sp_subjects'] (crucial fallback when Store is in cloud mode but cloud cache is empty)
+ * 3. Raw localStorage['sp_cloud_sp_subjects_<uid>'] (per-user cached cloud subjects)
+ * 4. Migration map (sp_migration_map_<uid>)
+ * Deduplicates by subject id so the dropdown NEVER disappears or becomes blank.
+ */
+function getAllAvailableSubjects() {
+  const list = [];
+  const seenIds = new Set();
+
+  function addSubject(s) {
+    if (!s || typeof s !== 'object') return;
+    const id = s.id ? String(s.id).trim() : '';
+    const name = s.name ? String(s.name).trim() : '';
+    if (!id || !name) return;
+    if (seenIds.has(id)) return;
+    seenIds.add(id);
+    list.push({
+      id,
+      name,
+      color: s.color || '#7c3aed',
+      teacher: s.teacher || '',
+      examDate: s.examDate || ''
+    });
+  }
+
+  // 1. Store.getSubjects()
+  try {
+    if (typeof Store !== 'undefined' && typeof Store.getSubjects === 'function') {
+      const storeSubs = Store.getSubjects();
+      if (Array.isArray(storeSubs)) {
+        storeSubs.forEach(addSubject);
+      }
+    }
+  } catch (e) {
+    console.warn('[StudyFlow] Error reading Store.getSubjects:', e);
+  }
+
+  // 2. Raw localStorage 'sp_subjects'
+  // When RepositoryFactory is in cloud mode, Store.getSubjects() routes to
+  // sp_cloud_sp_subjects_<uid>. If Supabase subjects table is empty,
+  // Store.getSubjects() returns []. Reading raw sp_subjects ensures local
+  // subjects (Mathematics, Database, etc.) are NEVER lost!
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const raw = localStorage.getItem('sp_subjects');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          parsed.forEach(addSubject);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[StudyFlow] Error reading localStorage sp_subjects:', e);
+  }
+
+  // 3. User cached cloud subjects: sp_cloud_sp_subjects_<uid>
+  try {
+    const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+      ? window.Auth.getUser() : null;
+    if (user && user.id && typeof localStorage !== 'undefined') {
+      const rawCloud = localStorage.getItem(`sp_cloud_sp_subjects_${user.id}`);
+      if (rawCloud) {
+        const parsedCloud = JSON.parse(rawCloud);
+        if (Array.isArray(parsedCloud)) {
+          parsedCloud.forEach(addSubject);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[StudyFlow] Error reading cached cloud subjects:', e);
+  }
+
+  // 4. Migration map subjects
+  try {
+    const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+      ? window.Auth.getUser() : null;
+    if (user && user.id) {
+      const idMap = getMigrationIdMap(user.id);
+      if (idMap && idMap.subjects) {
+        Object.entries(idMap.subjects).forEach(([locId, cloudUuid]) => {
+          if (cloudUuid && isUUID(cloudUuid)) {
+            const existing = list.find(s => s.id === locId);
+            if (existing && !seenIds.has(cloudUuid)) {
+              addSubject({ ...existing, id: cloudUuid });
+            }
+          }
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[StudyFlow] Error reading migration map:', e);
+  }
+
+  return list;
+}
+
+
+/**
+ * Resolves a subject entity for display across notes cards, detail modal, and filters.
+ * Works seamlessly for local subjects, cloud UUID subjects, and mapped subjects.
+ */
+function resolveSubjectForDisplay(subjectId) {
+  if (!subjectId) return null;
+  const fromStore = Store.getSubject(subjectId);
+  if (fromStore) return fromStore;
+
+  const allAvailable = getAllAvailableSubjects();
+  const directHit = allAvailable.find(s => s.id === subjectId);
+  if (directHit) return directHit;
+
+  const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+    ? window.Auth.getUser() : null;
+  if (user && user.id) {
+    // Check cached cloud subjects
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(`sp_cloud_sp_subjects_${user.id}`);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          if (Array.isArray(cached)) {
+            const hit = cached.find(s => s && s.id === subjectId);
+            if (hit) return hit;
+          }
+        }
+      }
+    } catch {}
+
+    // Check migration map: if subjectId is a cloud UUID mapped from a local subject
+    const idMap = getMigrationIdMap(user.id);
+    if (idMap && idMap.subjects) {
+      for (const [locId, cloudId] of Object.entries(idMap.subjects)) {
+        if (cloudId === subjectId) {
+          let localSubj = allAvailable.find(s => s.id === locId) || Store.getSubject(locId);
+          if (localSubj) return { ...localSubj, id: cloudId };
+        }
+      }
+    }
+  }
+
+  // Also check raw local storage 'sp_subjects' if Store was routed to cloud cache
+  try {
+    if (typeof localStorage !== 'undefined') {
+      const rawLocal = localStorage.getItem('sp_subjects');
+      if (rawLocal) {
+        const parsed = JSON.parse(rawLocal);
+        if (Array.isArray(parsed)) {
+          const hit = parsed.find(s => s && s.id === subjectId);
+          if (hit) return hit;
+        }
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+/**
+ * Builds a comprehensive lookup map for all available subjects (local + cloud + mapped).
+ */
+async function getSubjectsMapForRender() {
+  const subjectsMap = {};
+  const availableSubjects = getAllAvailableSubjects();
+  availableSubjects.forEach(s => { if (s && s.id) subjectsMap[s.id] = s; });
+
+  const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+    ? window.Auth.getUser() : null;
+  if (!user || !user.id) return subjectsMap;
+
+  // 1. Add mappings from migration idMap
+  const idMap = getMigrationIdMap(user.id);
+  if (idMap && idMap.subjects) {
+    Object.entries(idMap.subjects).forEach(([locId, cloudId]) => {
+      if (cloudId && isUUID(cloudId) && subjectsMap[locId]) {
+        subjectsMap[cloudId] = { ...subjectsMap[locId], id: cloudId };
+      }
+    });
+  }
+
+  // 2. Fetch fresh cloud subjects (or read cached)
+  const m = (typeof window !== 'undefined') ? window.StudyFlowRepository : (typeof global !== 'undefined' ? global.StudyFlowRepository : null);
+  const rf = m && m.RepositoryFactory;
+  if (!rf || typeof rf.getRepository !== 'function') return subjectsMap;
+  const cloudRepo = rf.getRepository('cloud');
+  if (!cloudRepo || typeof cloudRepo.getSubjects !== 'function') return subjectsMap;
+
+  try {
+    const cloudSubjects = await cloudRepo.getSubjects();
+    if (Array.isArray(cloudSubjects)) {
+      cloudSubjects.forEach(cs => {
+        if (cs && cs.id) subjectsMap[cs.id] = cs;
+      });
+    }
+  } catch {
+    // Already populated from local/cached in getAllAvailableSubjects
+  }
+
+  return subjectsMap;
+}
+
+/**
+ * Populates the subject select in the note add/edit modal.
+ * Follows the strict order:
+ * 1. form.reset() was executed before this function
+ * 2. obtain all available subjects
+ * 3. create <option> elements
+ * 4. append options to formSelect
+ * 5. set selected value
+ */
+function populateNoteModalSubjects(isCloud, currentSubjectId, modalMode = 'new') {
+  const formSelect = App.qs('#noteSubject');
+  if (!formSelect) return;
+
+  const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
+    ? window.Auth.getUser() : null;
+  const idMap = (user && user.id) ? (getMigrationIdMap(user.id).subjects || {}) : {};
+
+  // Obtain unified available subjects from all stores
+  const subjects = getAllAvailableSubjects();
+
+  // If a note is being edited with currentSubjectId that is not in subjects,
+  // preserve it so the assigned subject doesn't disappear from the select
+  if (currentSubjectId && !subjects.some(s => s.id === currentSubjectId)) {
+    const displaySubj = resolveSubjectForDisplay(currentSubjectId);
+    subjects.push({
+      id: currentSubjectId,
+      name: displaySubj ? displaySubj.name : 'Assigned Subject',
+      color: displaySubj ? displaySubj.color : '#7c3aed'
+    });
+  }
+
+  // Build options
+  let optionsHtml = '<option value="">— No subject —</option>';
+  subjects.forEach(s => {
+    if (s && s.id) {
+      optionsHtml += `<option value="${s.id}">${App.escapeHtml(s.name)}</option>`;
+    }
+  });
+
+  // 1. form.reset() was executed before this function
+  // 2. create & append <option> elements
+  formSelect.innerHTML = optionsHtml;
+
+  // 3. set selected value AFTER options exist in DOM
+  if (currentSubjectId) {
+    if (subjects.some(s => s.id === currentSubjectId)) {
+      formSelect.value = currentSubjectId;
+    } else {
+      const mappedCloudId = idMap[currentSubjectId];
+      if (mappedCloudId && subjects.some(s => s.id === mappedCloudId)) {
+        formSelect.value = mappedCloudId;
+      } else {
+        let matchedLocalId = null;
+        for (const [locId, cId] of Object.entries(idMap)) {
+          if (cId === currentSubjectId && subjects.some(s => s.id === locId)) {
+            matchedLocalId = locId;
+            break;
+          }
+        }
+        formSelect.value = matchedLocalId || '';
+      }
+    }
+  } else {
+    formSelect.value = '';
+  }
+}
+
 function populateSubjectDropdowns() {
-  const subjects = Store.getSubjects();
-  const options = subjects.map(s => `<option value="${s.id}">${App.escapeHtml(s.name)}</option>`).join('');
+  const subjects = getAllAvailableSubjects();
+  let options = subjects.map(s => `<option value="${s.id}">${App.escapeHtml(s.name)}</option>`).join('');
 
   const filterSelect = App.qs('#filterNoteSubject');
   const formSelect = App.qs('#noteSubject');
@@ -388,18 +842,23 @@ async function getDisplayNotes() {
    Render main view
    ========================================================================== */
 function render() {
-  getDisplayNotes().then(allNotes => {
-    _renderNotes(allNotes);
-  }).catch(() => {
-    // On any async rejection, render local notes so the list is never empty
-    _renderNotes(Store.getNotes());
-  });
+  Promise.all([getDisplayNotes(), getSubjectsMapForRender()])
+    .then(([allNotes, subjectsMap]) => {
+      _renderNotes(allNotes, subjectsMap);
+    })
+    .catch(() => {
+      // On any async rejection, render local notes so the list is never empty
+      _renderNotes(Store.getNotes());
+    });
 }
 
-function _renderNotes(allNotes) {
+function _renderNotes(allNotes, subjectsMapOverride = null) {
   const allSubjects = Store.getSubjects();
-  const subjectsMap = {};
-  allSubjects.forEach(s => { subjectsMap[s.id] = s; });
+  let subjectsMap = subjectsMapOverride;
+  if (!subjectsMap) {
+    subjectsMap = {};
+    allSubjects.forEach(s => { subjectsMap[s.id] = s; });
+  }
 
   // Update Top Stats Strip
   renderStatsStrip(allNotes, allSubjects);
@@ -433,65 +892,69 @@ function _renderNotes(allNotes) {
 
   // Handle empty states
   if (!visibleNotes.length) {
-    grid.innerHTML = renderEmptyState(allNotes.length, subjectsMap);
-    wireEmptyStateActions();
+    if (grid) {
+      grid.innerHTML = renderEmptyState(allNotes.length, subjectsMap);
+      wireEmptyStateActions();
+    }
     return;
   }
 
   // Render note cards
-  grid.innerHTML = visibleNotes.map(n => {
-    const subject = subjectsMap[n.subjectId];
-    const words = countWords(n.content);
-    const readTime = Math.max(1, Math.ceil(words / 150));
-    const timestamp = n.updatedAt || n.createdAt;
+  if (grid) {
+    grid.innerHTML = visibleNotes.map(n => {
+      const subject = subjectsMap[n.subjectId] || resolveSubjectForDisplay(n.subjectId);
+      const words = countWords(n.content);
+      const readTime = Math.max(1, Math.ceil(words / 150));
+      const timestamp = n.updatedAt || n.createdAt;
 
-    const renderedTitle = view.search ? highlightText(n.title, view.search) : App.escapeHtml(n.title);
-    const renderedContent = view.search ? highlightText(n.content, view.search) : App.escapeHtml(n.content);
+      const renderedTitle = view.search ? highlightText(n.title, view.search) : App.escapeHtml(n.title);
+      const renderedContent = view.search ? highlightText(n.content, view.search) : App.escapeHtml(n.content);
 
-    return `
-      <article class="note-card ${n.pinned ? 'note-card--pinned' : ''}" data-id="${n.id}" data-note='${JSON.stringify(n).replace(/'/g, '&#39;')}' tabindex="0" role="listitem" aria-label="Note: ${App.escapeHtml(n.title)}">
-        <div class="note-card__head">
-          <div class="note-card__title-wrap">
-            ${n.pinned ? '<span class="note-pin-indicator" title="Pinned Note" aria-label="Pinned">📌</span>' : ''}
-            <h3>${renderedTitle}</h3>
+      return `
+        <article class="note-card ${n.pinned ? 'note-card--pinned' : ''}" data-id="${n.id}" data-note='${JSON.stringify(n).replace(/'/g, '&#39;')}' tabindex="0" role="listitem" aria-label="Note: ${App.escapeHtml(n.title)}">
+          <div class="note-card__head">
+            <div class="note-card__title-wrap">
+              ${n.pinned ? '<span class="note-pin-indicator" title="Pinned Note" aria-label="Pinned">📌</span>' : ''}
+              <h3>${renderedTitle}</h3>
+            </div>
+            <div class="task-item__actions" onclick="event.stopPropagation()">
+              <button class="icon-btn ${n.pinned ? 'active text-warning' : ''}" data-pin title="${n.pinned ? 'Unpin note' : 'Pin note to top'}" aria-label="${n.pinned ? 'Unpin note' : 'Pin note'}">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="${n.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h20"/><path d="M12 18v4"/><path d="m19.07 10.93-1.41 1.41"/>
+                </svg>
+              </button>
+              <button class="icon-btn" data-copy title="Copy note text" aria-label="Copy &quot;${App.escapeHtml(n.title)}&quot; to clipboard">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+              </button>
+              <button class="icon-btn" data-edit title="Edit Note" aria-label="Edit &quot;${App.escapeHtml(n.title)}&quot;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+              </button>
+              <button class="icon-btn danger" data-delete title="Delete Note" aria-label="Delete &quot;${App.escapeHtml(n.title)}&quot;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>
+              </button>
+            </div>
           </div>
-          <div class="task-item__actions" onclick="event.stopPropagation()">
-            <button class="icon-btn ${n.pinned ? 'active text-warning' : ''}" data-pin title="${n.pinned ? 'Unpin note' : 'Pin note to top'}" aria-label="${n.pinned ? 'Unpin note' : 'Pin note'}">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="${n.pinned ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2v8"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h20"/><path d="M12 18v4"/><path d="m19.07 10.93-1.41 1.41"/>
-              </svg>
-            </button>
-            <button class="icon-btn" data-copy title="Copy note text" aria-label="Copy &quot;${App.escapeHtml(n.title)}&quot; to clipboard">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-            </button>
-            <button class="icon-btn" data-edit title="Edit Note" aria-label="Edit &quot;${App.escapeHtml(n.title)}&quot;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
-            </button>
-            <button class="icon-btn danger" data-delete title="Delete Note" aria-label="Delete &quot;${App.escapeHtml(n.title)}&quot;">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M10 11v6M14 11v6"/></svg>
-            </button>
+
+          ${subject ? `
+            <div class="note-card__subject-wrap" onclick="event.stopPropagation()">
+              <button type="button" class="note-subject-pill" data-filter-subj="${subject.id}" title="Filter notes for ${App.escapeHtml(subject.name)}">
+                <span class="dot" style="background:${subject.color}"></span>
+                <span>${App.escapeHtml(subject.name)}</span>
+              </button>
+            </div>
+          ` : ''}
+
+          <div class="note-card__content">${renderedContent}</div>
+
+          <div class="note-card__foot">
+            <span>${timestamp ? `Updated ${Dates.timeAgo(timestamp)}` : 'Recently updated'}</span>
+            <span>${words} word${words === 1 ? '' : 's'} · ${readTime} min read</span>
           </div>
-        </div>
+        </article>`;
+    }).join('');
 
-        ${subject ? `
-          <div class="note-card__subject-wrap" onclick="event.stopPropagation()">
-            <button type="button" class="note-subject-pill" data-filter-subj="${subject.id}" title="Filter notes for ${App.escapeHtml(subject.name)}">
-              <span class="dot" style="background:${subject.color}"></span>
-              <span>${App.escapeHtml(subject.name)}</span>
-            </button>
-          </div>
-        ` : ''}
-
-        <div class="note-card__content">${renderedContent}</div>
-
-        <div class="note-card__foot">
-          <span>${timestamp ? `Updated ${Dates.timeAgo(timestamp)}` : 'Recently updated'}</span>
-          <span>${words} word${words === 1 ? '' : 's'} · ${readTime} min read</span>
-        </div>
-      </article>`;
-  }).join('');
-
-  wireCards();
+    wireCards();
+  }
 }
 
 /* ==========================================================================
@@ -649,7 +1112,7 @@ async function pinNoteFromCard(id, cardNote) {
   }
   const note = cardNote;
   if (!note) { App.toast('Note not found', 'error'); return; }
-  const repo = repoForActiveNote();
+  const repo = repoForActiveNote(note);
   if (!repo || typeof repo.saveNote !== 'function') {
     App.toast('Could not pin note', 'error');
     return;
@@ -673,7 +1136,7 @@ async function deleteNoteFromCard(id, note) {
     Store.deleteNote(id);
     return true;
   }
-  const repo = repoForActiveNote();
+  const repo = repoForActiveNote(note);
   if (!repo || typeof repo.deleteNote !== 'function') return false;
   try {
     return Boolean(await repo.deleteNote(note.id));
@@ -817,7 +1280,7 @@ function bindModals() {
       App.toast('Note not found', 'error');
       return;
     }
-    const repo = repoForActiveNote();
+    const repo = repoForActiveNote(note);
     try {
       if (repo && typeof repo.saveNote === 'function') {
         const saved = await repo.saveNote({ id: note.id, title: note.title, content: note.content, subjectId: note.subjectId || '', pinned: !note.pinned });
@@ -840,7 +1303,7 @@ function bindModals() {
   /** Delete the currently-open note, routing cloud-only notes through the cloud
    *  repository (RLS-scoped) so they are actually removed from Supabase. */
   async function deleteDetailNote(note) {
-    const repo = repoForActiveNote();
+    const repo = repoForActiveNote(note);
     try {
       if (repo && typeof repo.deleteNote === 'function') {
         const ok = await repo.deleteNote(note.id);
@@ -879,15 +1342,20 @@ function getActiveDetailNote() {
  * (RLS-scoped) even when the app is in local mode; ordinary local notes stay
  * in the local Store. No global mode switch, no fake local note.
  */
-function repoForActiveNote() {
+function repoForActiveNote(noteOrId) {
   const m = (typeof window !== 'undefined') ? window.StudyFlowRepository : null;
   const rf = m && m.RepositoryFactory;
   if (!rf || typeof rf.getRepository !== 'function') return null;
-  // Use the cloud repo when the open note came from / should live in the cloud.
+  // Use the cloud repo when the active mode is cloud
   if (rf.getMode && rf.getMode() === 'cloud') return rf.getRepository('cloud');
   const user = (typeof window !== 'undefined' && window.Auth && window.Auth.getUser)
     ? window.Auth.getUser() : null;
-  if (user && user.id) return rf.getRepository('cloud'); // RLS-scoped; works for cloud-only notes too
+  if (!user || !user.id) return null;
+
+  // In local mode: only explicit cloud-backed notes route to cloud repo
+  if (noteOrId && isCloudNote(noteOrId)) {
+    return rf.getRepository('cloud');
+  }
   return null;
 }
 
@@ -897,25 +1365,37 @@ function openNoteModal(id = null, preselectedSubjectId = null) {
   form.reset();
   App.qsa('.field').forEach(f => f.classList.remove('invalid'));
 
-  if (id) {
-    const n = (view.activeDetailNote && view.activeDetailNote.id === id)
+  const n = id
+    ? ((view.activeDetailNote && view.activeDetailNote.id === id)
       ? view.activeDetailNote
-      : (Store.getNote(id) || (view.activeDetailId === id ? view.activeDetailNote : null));
-    if (!n) {
-      App.toast('Note not found', 'error');
-      return;
-    }
+      : (Store.getNote(id) || (view.activeDetailId === id ? view.activeDetailNote : null)))
+    : null;
+
+  if (id && !n) {
+    App.toast('Note not found', 'error');
+    return;
+  }
+
+  if (!id) {
+    view.activeDetailId = null;
+    view.activeDetailNote = null;
+  }
+
+  const isCloud = isCloudNote(n || id);
+  const currentSubj = n ? (n.subjectId || '') : (preselectedSubjectId || view.subject || '');
+
+  populateNoteModalSubjects(isCloud, currentSubj, id ? `edit (${id})` : 'new');
+
+  if (n) {
     App.qs('#noteModalTitle').textContent = 'Edit Note';
     App.qs('#noteId').value = n.id;
     App.qs('#noteTitle').value = n.title;
-    App.qs('#noteSubject').value = n.subjectId || '';
     App.qs('#noteContent').value = n.content;
     App.qs('#notePinned').checked = Boolean(n.pinned);
     App.qs('#modalWordCount').textContent = `${countWords(n.content)} words`;
   } else {
     App.qs('#noteModalTitle').textContent = 'Add Note';
     App.qs('#noteId').value = '';
-    App.qs('#noteSubject').value = preselectedSubjectId || view.subject || '';
     App.qs('#noteContent').value = '';
     App.qs('#notePinned').checked = view.filter === 'pinned';
     App.qs('#modalWordCount').textContent = '0 words';
@@ -927,18 +1407,18 @@ function openNoteModal(id = null, preselectedSubjectId = null) {
 /* ==========================================================================
    Handle Note Form Submission
    ========================================================================== */
-function handleSubmitNote(e) {
+async function handleSubmitNote(e) {
   if (e && e.preventDefault) e.preventDefault();
   const title = App.qs('#noteTitle').value.trim();
   const content = App.qs('#noteContent').value.trim();
   let valid = true;
 
   if (title.length < 1) {
-    App.qs('#fn-title').classList.add('invalid');
+    App.qs('#fn-title')?.classList.add('invalid');
     valid = false;
   }
   if (content.length < 1) {
-    App.qs('#fn-content').classList.add('invalid');
+    App.qs('#fn-content')?.classList.add('invalid');
     valid = false;
   }
   if (!valid) {
@@ -947,27 +1427,52 @@ function handleSubmitNote(e) {
   }
 
   const id = App.qs('#noteId').value;
+  const rawSubjectId = App.qs('#noteSubject').value;
+
+  const noteTarget = id
+    ? ((view.activeDetailNote && view.activeDetailNote.id === id)
+      ? view.activeDetailNote
+      : (Store.getNote(id) || { id }))
+    : null;
+
+  const isCloud = isCloudNote(noteTarget || id);
+  const repo = repoForActiveNote(noteTarget);
+
+  let finalSubjectId = rawSubjectId;
+  if (isCloud) {
+    finalSubjectId = await resolveCloudSubjectId(rawSubjectId);
+  } else {
+    // Normal local note: preserve local subject ID exactly as chosen
+    finalSubjectId = rawSubjectId;
+  }
+
   const data = {
     title,
     content,
-    subjectId: App.qs('#noteSubject').value,
+    subjectId: finalSubjectId || '',
     pinned: App.qs('#notePinned').checked
   };
   if (id) data.id = id;
 
-  const repo = repoForActiveNote();
   const savePromise = (repo && typeof repo.saveNote === 'function')
     ? repo.saveNote(data).then(saved => {
-        if (Store.getNote(id)) Store.saveNote({ ...saved, id });
+        if (id && Store.getNote(id)) Store.saveNote({ ...saved, id });
         return saved;
       })
-    : (Store.saveNote(data), Promise.resolve(data));
+    : Promise.resolve().then(() => {
+        const saved = Store.saveNote(data);
+        return saved;
+      });
+
   savePromise
     .then(saved => {
       view.activeDetailNote = saved || view.activeDetailNote;
       App.closeModal('#noteModal');
       App.toast(id ? 'Note updated' : 'Note created successfully', 'success');
       render();
+      if (view.activeDetailId === id && id) {
+        openNoteDetailModal(id, saved);
+      }
     })
     .catch(err => {
       console.error('[StudyFlow] Failed to save note:', err);
@@ -992,7 +1497,7 @@ function openNoteDetailModal(id, fallbackNote) {
   }
 
   view.activeDetailId = id;
-  const subject = Store.getSubject(note.subjectId);
+  const subject = resolveSubjectForDisplay(note.subjectId);
   const words = countWords(note.content);
   const readTime = Math.max(1, Math.ceil(words / 150));
   const timestamp = note.updatedAt || note.createdAt;
@@ -1145,4 +1650,37 @@ function wireEmptyStateActions() {
       render();
     });
   }
+}
+
+if (typeof window !== 'undefined') {
+  window.StudyFlowNotes = {
+    view,
+    isUUID,
+    isCloudNote,
+    repoForActiveNote,
+    resolveCloudSubjectId,
+    resolveSubjectForDisplay,
+    getAllAvailableSubjects,
+    populateNoteModalSubjects,
+    populateSubjectDropdowns,
+    getSubjectsMapForRender,
+    handleSubmitNote,
+    openNoteModal
+  };
+}
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
+    view,
+    isUUID,
+    isCloudNote,
+    repoForActiveNote,
+    resolveCloudSubjectId,
+    resolveSubjectForDisplay,
+    getAllAvailableSubjects,
+    populateNoteModalSubjects,
+    populateSubjectDropdowns,
+    getSubjectsMapForRender,
+    handleSubmitNote,
+    openNoteModal
+  };
 }
